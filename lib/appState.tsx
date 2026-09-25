@@ -168,8 +168,17 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   };
 
   const advanceBlock = () => {
-    setBlock((b) => b + 1);
+    const newBlock = block + 1;
+    setBlock(newBlock);
     setSession(0);
+    if (userId) {
+      pushProfile(userId, latest.current.profile, {
+        block: newBlock,
+        session: 0,
+        streak: latest.current.streak,
+        lastDate: latest.current.lastDate,
+      }).catch((e) => console.warn("Block-advance save failed, staying local:", e));
+    }
   };
 
   const updateHistoryEntry = (blockN: number, idx: number, patch: Partial<HistoryEntry>) => {
