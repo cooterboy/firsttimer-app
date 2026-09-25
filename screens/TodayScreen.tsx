@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, radius, spacing, type } from "../lib/theme";
-import { firstDayGym, unit, weekOf, weeksPerBlock } from "../lib/gymProgram";
+import { firstDayGym, unit } from "../lib/gymProgram";
 import { buildSessionForProfile, lastFor, nextTrainingDay } from "../lib/sessionEngine";
 import { useAppState } from "../lib/appState";
 import { useWorkoutModal } from "../lib/workoutModal";
+import AppHeader from "../components/AppHeader";
 import Card from "../components/Card";
 
 const PLAN_DAYS = [0, 2, 4]; // Mon / Wed / Fri, 0 = Monday
@@ -31,7 +31,6 @@ export default function TodayScreen() {
   const { colors } = useTheme();
   const appState = useAppState();
   const workoutModal = useWorkoutModal();
-  const navigation = useNavigation<any>();
   const tabBarHeight = useBottomTabBarHeight();
   const dow = (new Date().getDay() + 6) % 7;
 
@@ -39,17 +38,10 @@ export default function TodayScreen() {
   const trainedToday = appState.history.some((h) => isSameDay(h.date, new Date()));
   const resume = !!appState.active && appState.active.block === appState.block && appState.active.idx === appState.session;
   const built = buildSessionForProfile(appState.block, appState.session, appState.profile);
-  const week = weekOf(appState.session);
-  const weekFilled = week - 1;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
-      <Header
-        colors={colors}
-        weekFilled={weekFilled}
-        streak={appState.streak}
-        onAvatarPress={() => navigation.navigate("You")}
-      />
+      <AppHeader />
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: tabBarHeight + spacing.lg }]}
         showsVerticalScrollIndicator={false}
@@ -105,43 +97,6 @@ export default function TodayScreen() {
   );
 }
 
-function Header({
-  colors,
-  weekFilled,
-  streak,
-  onAvatarPress,
-}: {
-  colors: ReturnType<typeof useTheme>["colors"];
-  weekFilled: number;
-  streak: number;
-  onAvatarPress: () => void;
-}) {
-  const total = weeksPerBlock();
-  return (
-    <View style={styles.header}>
-      <View>
-        <Text style={[styles.logoWord, { color: colors.ink, fontFamily: fonts.display }]}>
-          FIRST <Text style={{ color: colors.accent, fontFamily: fonts.display }}>TIMER</Text>
-        </Text>
-        <View style={styles.logoBar}>
-          {Array.from({ length: total }).map((_, i) => (
-            <View key={i} style={[styles.logoBarSeg, { backgroundColor: i < weekFilled ? colors.accent : colors.line }]} />
-          ))}
-        </View>
-      </View>
-      <View style={styles.hdrRight}>
-        {streak > 0 ? (
-          <View style={[styles.streakBadge, { backgroundColor: colors.accentSoft }]}>
-            <Text style={{ color: colors.accent, fontFamily: fonts.bodyBold, fontSize: 13 }}>{streak} in a row</Text>
-          </View>
-        ) : null}
-        <TouchableOpacity style={[styles.avatar, { backgroundColor: colors.ink }]} onPress={onAvatarPress}>
-          <Text style={[styles.avatarText, { color: colors.paper, fontFamily: fonts.display }]}>FT</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
 
 function WeekStrip({
   dow,
@@ -381,21 +336,6 @@ function InfoRows({ colors }: { colors: ReturnType<typeof useTheme>["colors"] })
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xs,
-  },
-  logoWord: { fontSize: type.displayWord, letterSpacing: 0.5 },
-  logoBar: { flexDirection: "row", gap: 3, marginTop: 5 },
-  logoBarSeg: { width: 9, height: 4, borderRadius: 2 },
-  hdrRight: { flexDirection: "row", alignItems: "center", gap: 10 },
-  streakBadge: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999 },
-  avatar: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 16, letterSpacing: 0.5 },
   greet: { marginBottom: spacing.md },
   date: { fontSize: type.eyebrow, letterSpacing: 1 },
   greetTitle: { fontSize: type.displayPageTitle, marginTop: 2, letterSpacing: 0.5 },

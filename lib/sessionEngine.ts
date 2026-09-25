@@ -523,3 +523,28 @@ export function devSeedNearBlockEnd(block: number): HistoryEntry[] {
   }
   return entries;
 }
+
+// prototype's inline "total weight moved" calc, reused on Progress and the retest card.
+export function historyMovedTotal(history: HistoryEntry[]): number {
+  let moved = 0;
+  history.forEach((h) =>
+    Object.keys(h.moves).forEach((n) => {
+      const m = h.moves[n];
+      if (m.type !== "weight") return;
+      if (m.setW && m.setW.length) m.setW.forEach((v) => (moved += (m.reps || 10) * (Number(v) || 0)));
+      else if (m.w) moved += (m.sets || 0) * (m.reps || 10) * Number(m.w);
+    })
+  );
+  return Math.round(moved);
+}
+export function movedLabel(n: number): string {
+  return n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, "") + "k" : String(n);
+}
+
+// prototype's setsTxt(): the compact "then vs now" style summary for a movement row.
+export function setsSummary(m: HistoryMove, units: Profile["units"]): string {
+  const u = unit(units);
+  if (!m.w && !(m.setW || []).some((v) => v)) return "no weight";
+  if (m.setW && m.setW.length > 1 && m.setW.some((v) => v !== m.setW[0])) return `${m.setW.join("/")} ${u}`;
+  return `${m.w || "—"} ${u}`;
+}
