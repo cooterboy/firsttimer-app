@@ -1,20 +1,39 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect } from "react";
+import { View } from "react-native";
+import { StatusBar } from "expo-status-bar";
+import * as SplashScreen from "expo-splash-screen";
+import { ThemeProvider, useTheme } from "./lib/ThemeContext";
+import { useAppFonts } from "./lib/fonts";
+import TodayScreen from "./screens/TodayScreen";
 
-export default function App() {
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
+function Root() {
+  const { scheme, colors } = useTheme();
+  const [fontsLoaded] = useAppFonts();
+
+  const hideSplash = useCallback(async () => {
+    if (fontsLoaded) await SplashScreen.hideAsync();
+  }, [fontsLoaded]);
+
+  useEffect(() => {
+    hideSplash();
+  }, [hideSplash]);
+
+  if (!fontsLoaded) return null;
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.tsx to start working on your app!</Text>
-      <StatusBar style="auto" />
+    <View style={{ flex: 1, backgroundColor: colors.paper }}>
+      <StatusBar style={scheme === "dark" ? "light" : "dark"} />
+      <TodayScreen />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+export default function App() {
+  return (
+    <ThemeProvider>
+      <Root />
+    </ThemeProvider>
+  );
+}
