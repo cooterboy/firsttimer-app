@@ -1,16 +1,32 @@
 import { useCallback, useEffect } from "react";
 import { Text, View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { NavigationContainer } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { ThemeProvider, useTheme } from "./lib/ThemeContext";
 import { AppStateProvider, useAppState } from "./lib/appState";
+import { WorkoutModalProvider, useWorkoutModal } from "./lib/workoutModal";
 import { isSupabaseConfigured } from "./lib/supabase";
 import { useAppFonts } from "./lib/fonts";
 import { fonts } from "./lib/theme";
-import TodayScreen from "./screens/TodayScreen";
+import AppNavigator from "./navigation/AppNavigator";
 import AuthScreen from "./screens/AuthScreen";
+import WorkoutScreen from "./screens/WorkoutScreen";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+function MainApp() {
+  const workoutModal = useWorkoutModal();
+  return (
+    <>
+      <NavigationContainer>
+        <AppNavigator />
+      </NavigationContainer>
+      <WorkoutScreen visible={workoutModal.visible} onClose={workoutModal.close} />
+    </>
+  );
+}
 
 function Root() {
   const { scheme, colors } = useTheme();
@@ -44,17 +60,25 @@ function Root() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.paper }}>
       <StatusBar style={scheme === "dark" ? "light" : "dark"} />
-      {appState.userId ? <TodayScreen /> : <AuthScreen />}
+      {appState.userId ? (
+        <WorkoutModalProvider>
+          <MainApp />
+        </WorkoutModalProvider>
+      ) : (
+        <AuthScreen />
+      )}
     </View>
   );
 }
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AppStateProvider>
-        <Root />
-      </AppStateProvider>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AppStateProvider>
+          <Root />
+        </AppStateProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

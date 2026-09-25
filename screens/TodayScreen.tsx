@@ -1,13 +1,14 @@
 import React, { useState } from "react";
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, radius, spacing, type } from "../lib/theme";
 import { firstDayGym, unit, weekOf, weeksPerBlock } from "../lib/gymProgram";
 import { buildSessionForProfile, lastFor, nextTrainingDay } from "../lib/sessionEngine";
 import { useAppState } from "../lib/appState";
+import { useWorkoutModal } from "../lib/workoutModal";
 import Card from "../components/Card";
-import Sheet from "../components/workout/Sheet";
-import WorkoutScreen from "./WorkoutScreen";
 
 const PLAN_DAYS = [0, 2, 4]; // Mon / Wed / Fri, 0 = Monday
 const DAY_LETTERS = ["M", "T", "W", "T", "F", "S", "S"];
@@ -28,8 +29,8 @@ function isSameDay(iso: string, d: Date) {
 export default function TodayScreen() {
   const { colors } = useTheme();
   const appState = useAppState();
-  const [workoutOpen, setWorkoutOpen] = useState(false);
-  const [accountOpen, setAccountOpen] = useState(false);
+  const workoutModal = useWorkoutModal();
+  const navigation = useNavigation<any>();
   const dow = (new Date().getDay() + 6) % 7;
 
   const done = appState.history.length;
@@ -41,7 +42,12 @@ export default function TodayScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
-      <Header colors={colors} weekFilled={weekFilled} streak={appState.streak} onAvatarPress={() => setAccountOpen(true)} />
+      <Header
+        colors={colors}
+        weekFilled={weekFilled}
+        streak={appState.streak}
+        onAvatarPress={() => navigation.navigate("You")}
+      />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.greet}>
           <Text style={[styles.date, { color: colors.muted, fontFamily: fonts.bodyBold }]}>
@@ -68,7 +74,7 @@ export default function TodayScreen() {
             { backgroundColor: colors.accent },
             trainedToday && !resume && { backgroundColor: colors.sunken },
           ]}
-          onPress={() => setWorkoutOpen(true)}
+          onPress={workoutModal.open}
         >
           <Text
             style={[
@@ -84,40 +90,6 @@ export default function TodayScreen() {
         {done === 0 ? <BeforeFirstOne colors={colors} /> : null}
         <InfoRows colors={colors} />
       </ScrollView>
-
-      <WorkoutScreen visible={workoutOpen} onClose={() => setWorkoutOpen(false)} />
-
-      <Sheet visible={accountOpen} onClose={() => setAccountOpen(false)}>
-        <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display, marginBottom: 8 }]}>
-          {appState.profile.name || "Your account"}
-        </Text>
-        {appState.userEmail ? (
-          <Text style={[styles.note, { color: colors.muted, marginBottom: spacing.md }]}>{appState.userEmail}</Text>
-        ) : null}
-        <TouchableOpacity
-          style={[styles.signOutBtn, { borderColor: colors.bad }]}
-          onPress={() => {
-            setAccountOpen(false);
-            appState.signOut();
-          }}
-        >
-          <Text style={{ color: colors.bad, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>Sign out</Text>
-        </TouchableOpacity>
-
-        {__DEV__ ? (
-          <TouchableOpacity
-            style={[styles.signOutBtn, { borderColor: colors.line, marginTop: spacing.sm }]}
-            onPress={() => {
-              setAccountOpen(false);
-              appState.resetTestData();
-            }}
-          >
-            <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>
-              Reset test data (dev only)
-            </Text>
-          </TouchableOpacity>
-        ) : null}
-      </Sheet>
     </SafeAreaView>
   );
 }
@@ -435,7 +407,6 @@ const styles = StyleSheet.create({
   accordionHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   accordionTitle: { fontSize: type.body },
   accordionBody: { fontSize: type.bodySmall, marginTop: 8, lineHeight: 18 },
-  signOutBtn: { borderWidth: 1, borderRadius: 13, padding: 14, alignItems: "center" },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 },
   infoIcon: { width: 32, height: 32, borderRadius: 9, alignItems: "center", justifyContent: "center" },
 });
