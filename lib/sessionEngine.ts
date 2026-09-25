@@ -6,6 +6,7 @@
 import {
   BuiltSession,
   BLOCK_SESSIONS,
+  GYM,
   MovementVariant,
   buildSession as buildSessionData,
   daysPer,
@@ -425,4 +426,100 @@ export function coachRead(wo: ActiveWorkout, real: ActiveMove[], isFirst: boolea
   if (!out.length) out.push("Every set done, nothing hurt, nothing felt off. That's the session the whole program is built on. Same again next time, a little heavier where it felt easy.");
   if (!isFirst && wo.week === 2) out.push("Week 2 adds a third set. Expect the last one to feel harder than the first two. That's the point.");
   return out.slice(0, 3);
+}
+
+// ---- retest: "week one against now" (prototype's liftDeltas + paywallProof) ----
+export function weekKey(d: string | Date): number {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return x.getTime();
+}
+
+export function liftDeltas(history: HistoryEntry[]): Record<string, { first: number; last: number; count: number; delta: number }> {
+  const out: Record<string, { first: number; last: number; count: number; delta: number }> = {};
+  history.forEach((h) =>
+    Object.keys(h.moves).forEach((n) => {
+      const m = h.moves[n];
+      if (m.type !== "weight" || !m.w) return;
+      if (!out[n]) out[n] = { first: Number(m.w), last: Number(m.w), count: 0, delta: 0 };
+      out[n].last = Number(m.w);
+      out[n].count++;
+    })
+  );
+  Object.keys(out).forEach((n) => {
+    out[n].delta = Math.round((out[n].last - out[n].first) * 10) / 10;
+  });
+  return out;
+}
+
+export type RetestSummary = {
+  weeks: number;
+  sessions: number;
+  liftsUp: number;
+  movedLabel: string;
+  firstDate: string;
+  rows: { name: string; first: number; last: number; pct: number }[];
+};
+
+// prototype's paywallProof(): first logged weight vs latest, per movement, since the
+// block (or program) started. Shown when a block completes ("session 24 vs session 1").
+export function retestSummary(history: HistoryEntry[], units: Profile["units"]): RetestSummary | null {
+  const done = history.length;
+  if (done < 1) return null;
+  const d = liftDeltas(history);
+  const rows = Object.keys(d)
+    .filter((n) => d[n].count >= 2 && d[n].first)
+    .sort((a, b) => d[b].delta - d[a].delta)
+    .map((n) => ({ name: n, first: d[n].first, last: d[n].last, pct: Math.round(((d[n].last - d[n].first) / d[n].first) * 100) }));
+  const weeks = new Set(history.map((h) => weekKey(h.date))).size;
+  let moved = 0;
+  history.forEach((h) =>
+    Object.keys(h.moves).forEach((n) => {
+      const m = h.moves[n];
+      if (m.type !== "weight") return;
+      if (m.setW && m.setW.length) m.setW.forEach((v) => (moved += (m.reps || 10) * (Number(v) || 0)));
+      else if (m.w) moved += (m.sets || 0) * (m.reps || 10) * Number(m.w);
+    })
+  );
+  const movedLabel = moved >= 1000 ? (moved / 1000).toFixed(1).replace(/\.0$/, "") + "k" : String(Math.round(moved));
+  const liftsUp = rows.filter((r) => r.pct > 0).length;
+  return { weeks, sessions: done, liftsUp, movedLabel, firstDate: history[0].date, rows };
+}
+
+// Dev-only: fabricate plausible history for testing block-end screens (retest table,
+// "block done" copy) without actually playing through 23 real sessions first. Leaves
+// the last session of the block for a real playthrough.
+export function devSeedNearBlockEnd(block: number): HistoryEntry[] {
+  const count = BLOCK_SESSIONS - 1;
+  const entries: HistoryEntry[] = [];
+  const startWeight: Record<string, number> = {};
+  for (let idx = 0; idx < count; idx++) {
+    const letter = ["A", "B", "C"][idx % 3] as "A" | "B" | "C";
+    const daysAgo = (count - idx) * 2;
+    const date = new Date(Date.now() - daysAgo * 86400000).toISOString();
+    const moves: HistoryEntry["moves"] = {};
+    GYM[letter].forEach((m) => {
+      if (m.type !== "weight") {
+        moves[m.n] = { w: "", setW: [], feel: "right", sets: 3, reps: 0, type: m.type, note: "", mtags: [] };
+        return;
+      }
+      if (!(m.n in startWeight)) startWeight[m.n] = /db|dumbbell|goblet/i.test(m.n) ? 15 : 40;
+      const bumps = Math.floor(idx / 3);
+      const w = startWeight[m.n] + bumps * 5;
+      moves[m.n] = { w: String(w), setW: [String(w), String(w), String(w)], feel: "right", sets: 3, reps: 10, type: "weight", note: "", mtags: [] };
+    });
+    entries.push({
+      id: `dev-seed-${block}-${idx}`,
+      block,
+      idx,
+      letter,
+      week: Math.floor(idx / daysPer()) + 1,
+      date,
+      moves,
+      note: "",
+      minutes: 38,
+    });
+  }
+  return entries;
 }

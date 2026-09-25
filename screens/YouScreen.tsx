@@ -24,14 +24,24 @@ export default function YouScreen() {
         </TouchableOpacity>
 
         {__DEV__ ? (
-          <TouchableOpacity
-            style={[styles.btn, { borderColor: colors.line, marginTop: spacing.sm }]}
-            onPress={() => appState.resetTestData()}
-          >
-            <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>
-              Reset test data (dev only)
-            </Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              style={[styles.btn, { borderColor: colors.line, marginTop: spacing.sm }]}
+              onPress={() => appState.resetTestData()}
+            >
+              <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>
+                Reset test data (dev only)
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.btn, { borderColor: colors.line, marginTop: spacing.sm }]}
+              onPress={() => appState.devSeedNearBlockEnd()}
+            >
+              <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>
+                Seed to session 24 (dev only)
+              </Text>
+            </TouchableOpacity>
+          </>
         ) : null}
       </ScrollView>
     </SafeAreaView>

@@ -5,7 +5,7 @@ import { useTheme } from "../../lib/ThemeContext";
 import { fonts, spacing } from "../../lib/theme";
 import { ActiveMove, ActiveWorkout, HistoryEntry, Profile } from "../../lib/types";
 import { unit } from "../../lib/gymProgram";
-import { FinishCopy, SESSION_TAGS, movedToday, prevFor } from "../../lib/sessionEngine";
+import { FinishCopy, RetestSummary, SESSION_TAGS, fmtDate, movedToday, prevFor, retestSummary } from "../../lib/sessionEngine";
 import Card from "../Card";
 
 function Badge({ kind, text }: { kind: "good" | "warn" | "muted"; text: string }) {
@@ -57,6 +57,7 @@ export default function FinishView({
 
   const totalMoved = movedToday(real);
   const doneMoves = real.filter((m) => !m.skipped).length;
+  const retest: RetestSummary | null = blockDone ? retestSummary(history, profile.units) : null;
 
   const share = () => {
     Share.share({ message: fc.caption }).catch(() => {});
@@ -143,6 +144,42 @@ export default function FinishView({
           Rules from the program, reviewed by a certified trainer.
         </Text>
       </Card>
+
+      {retest && retest.rows.length ? (
+        <Card style={{ marginTop: spacing.md }}>
+          <Text style={[styles.fieldLabel, { color: colors.muted }]}>WHAT YOU BUILT</Text>
+          <Text style={[styles.retestBig, { color: colors.ink, fontFamily: fonts.display }]}>
+            {retest.weeks} week{retest.weeks === 1 ? "" : "s"}. {retest.sessions} session{retest.sessions === 1 ? "" : "s"}.
+          </Text>
+          <Text style={[styles.lede, { color: colors.ink2, marginBottom: 14 }]}>
+            Since {fmtDate(retest.firstDate)}.{" "}
+            {retest.liftsUp
+              ? `${retest.liftsUp} of your lifts went up and none of it came from anywhere but you showing up.`
+              : "Every one of them logged."}
+          </Text>
+          <Text style={[styles.compareHead, { color: colors.muted }]}>Week one against now</Text>
+          <View style={styles.compareRow}>
+            <Text style={[styles.compareColHead, { color: colors.muted, flex: 1.4 }]}>Movement</Text>
+            <Text style={[styles.compareColHead, { color: colors.muted, flex: 1, textAlign: "right" }]}>Then</Text>
+            <Text style={[styles.compareColHead, { color: colors.muted, flex: 1, textAlign: "right" }]}>Now</Text>
+          </View>
+          {retest.rows.map((r) => (
+            <View key={r.name} style={styles.compareRow}>
+              <Text style={[styles.compareCell, { color: colors.ink, flex: 1.4 }]}>{r.name}</Text>
+              <Text style={[styles.compareCell, { color: colors.muted, fontFamily: fonts.mono, flex: 1, textAlign: "right" }]}>
+                {r.first}
+              </Text>
+              <Text style={[styles.compareCell, { color: colors.ink, fontFamily: fonts.monoBold, flex: 1, textAlign: "right" }]}>
+                {r.last}
+                {r.pct > 0 ? <Text style={{ color: colors.good, fontSize: 12 }}> +{r.pct}%</Text> : null}
+              </Text>
+            </View>
+          ))}
+          <Text style={[styles.note, { color: colors.muted, marginTop: 10 }]}>
+            Your first logged weight against your latest, in {unit(profile.units)}.
+          </Text>
+        </Card>
+      ) : null}
 
       <Card style={{ marginTop: spacing.md }}>
         <Text style={[styles.fieldLabel, { color: colors.muted }]}>NEXT UP</Text>
@@ -241,6 +278,11 @@ export default function FinishView({
 
 const styles = StyleSheet.create({
   head: { marginBottom: 4 },
+  retestBig: { fontSize: 28, letterSpacing: 0.5, marginTop: 2, marginBottom: 4 },
+  compareHead: { fontSize: 11, textTransform: "uppercase", letterSpacing: 1, fontWeight: "700", marginBottom: 8 },
+  compareRow: { flexDirection: "row", alignItems: "center" },
+  compareColHead: { fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: "700", paddingBottom: 6 },
+  compareCell: { fontSize: 13, paddingVertical: 6 },
   badgeGood: { alignSelf: "flex-start", backgroundColor: "rgba(95,203,134,.18)", paddingHorizontal: 9, paddingVertical: 4, borderRadius: 6, marginBottom: 8 },
   finBig: { fontSize: 44, letterSpacing: 0.5, lineHeight: 44 },
   lede: { fontSize: 14, lineHeight: 20, marginTop: 6 },

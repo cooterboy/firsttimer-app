@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "./supabase";
 import { fetchRemoteState, pushProfile, pushSession, resetTestData as resetTestDataRemote } from "./sync";
+import { devSeedNearBlockEnd } from "./sessionEngine";
 import { ActiveWorkout, HistoryEntry, Profile, Settings } from "./types";
 
 // In-memory app state, mirroring the shape of the prototype's `state` object
@@ -51,6 +52,7 @@ type AppStateContextValue = AppState & {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
   resetTestData: () => Promise<void>;
+  devSeedNearBlockEnd: () => void;
 };
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
@@ -215,6 +217,17 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setActive(null);
   };
 
+  // Dev-only: fabricate 23 sessions so the next real playthrough is session 24 —
+  // lets you reach block-end/retest screens without grinding through the whole block.
+  const devSeedNearBlockEndFn = () => {
+    const seeded = devSeedNearBlockEnd(block);
+    setHistory(seeded);
+    setSession(seeded.length);
+    setStreak(seeded.length);
+    setLastDate(seeded[seeded.length - 1].date);
+    setActive(null);
+  };
+
   const value = useMemo<AppStateContextValue>(
     () => ({
       profile,
@@ -237,6 +250,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       signOut,
       resetPassword,
       resetTestData,
+      devSeedNearBlockEnd: devSeedNearBlockEndFn,
     }),
     [profile, settings, block, session, history, streak, lastDate, active, userId, userEmail, authLoading]
   );
