@@ -1,5 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { Modal, SafeAreaView, ScrollView, Share, Text, TouchableOpacity, View, StyleSheet } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  Share,
+  Text,
+  TouchableOpacity,
+  View,
+  StyleSheet,
+} from "react-native";
 import * as Haptics from "expo-haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
@@ -284,6 +295,7 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
           </View>
         ) : null}
 
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           {phase === "warmup" && wo.moves[wo.mi] ? (
             <WarmupView move={wo.moves[wo.mi]} gym={profile.where === "gym"} onDone={onWarmupDone} />
@@ -364,6 +376,7 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
               })()
             : null}
         </ScrollView>
+        </KeyboardAvoidingView>
 
         <Sheet visible={!!sheet} onClose={() => setSheet(null)}>
           <WorkoutSheetRouter
