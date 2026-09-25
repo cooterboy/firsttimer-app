@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "./supabase";
-import { fetchRemoteState, pushProfile, pushSession } from "./sync";
+import { fetchRemoteState, pushProfile, pushSession, resetTestData as resetTestDataRemote } from "./sync";
 import { ActiveWorkout, HistoryEntry, Profile, Settings } from "./types";
 
 // In-memory app state, mirroring the shape of the prototype's `state` object
@@ -50,6 +50,7 @@ type AppStateContextValue = AppState & {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
+  resetTestData: () => Promise<void>;
 };
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
@@ -204,6 +205,16 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     return { error: error ? error.message : null };
   };
 
+  const resetTestData = async () => {
+    if (userId) await resetTestDataRemote(userId);
+    setHistory([]);
+    setBlock(1);
+    setSession(0);
+    setStreak(0);
+    setLastDate(null);
+    setActive(null);
+  };
+
   const value = useMemo<AppStateContextValue>(
     () => ({
       profile,
@@ -225,6 +236,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signOut,
       resetPassword,
+      resetTestData,
     }),
     [profile, settings, block, session, history, streak, lastDate, active, userId, userEmail, authLoading]
   );

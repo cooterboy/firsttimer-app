@@ -126,3 +126,15 @@ export async function pushSession(userId: string, entry: HistoryEntry) {
   const { error } = await supabase.from("sessions").upsert(row);
   if (error) throw error;
 }
+
+// Dev-only: wipe this account's logged sessions and reset their block/session
+// position, so the "one session a day" gate doesn't block repeated testing.
+export async function resetTestData(userId: string) {
+  const { error: delErr } = await supabase.from("sessions").delete().eq("user_id", userId);
+  if (delErr) throw delErr;
+  const { error: profErr } = await supabase
+    .from("profiles")
+    .update({ block: 1, session: 0, streak: 0, last_date: null })
+    .eq("id", userId);
+  if (profErr) throw profErr;
+}

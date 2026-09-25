@@ -103,6 +103,20 @@ export default function TodayScreen() {
         >
           <Text style={{ color: colors.bad, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>Sign out</Text>
         </TouchableOpacity>
+
+        {__DEV__ ? (
+          <TouchableOpacity
+            style={[styles.signOutBtn, { borderColor: colors.line, marginTop: spacing.sm }]}
+            onPress={() => {
+              setAccountOpen(false);
+              appState.resetTestData();
+            }}
+          >
+            <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>
+              Reset test data (dev only)
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       </Sheet>
     </SafeAreaView>
   );

@@ -40,16 +40,21 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
   const [rest, setRest] = useState<{ total: number; end: number } | null>(null);
   const [, forceTick] = useState(0);
 
-  // Open a fresh session (or keep the one already in progress) whenever the modal opens.
+  // Open a fresh session (or resume) whenever the modal opens. appState.active is the
+  // source of truth for "is a session actually in progress" — it's explicitly cleared
+  // when one finishes (or test data resets), so trust it instead of this screen's own
+  // leftover local state, which would otherwise still match on block/idx and resume a
+  // session that's already done.
   useEffect(() => {
     if (!visible) return;
-    setWo((cur) => {
-      if (cur && cur.block === appState.block && cur.idx === appState.session) return cur;
+    if (appState.active && appState.active.block === appState.block && appState.active.idx === appState.session) {
+      setWo(appState.active);
+    } else {
       const built = buildSessionForProfile(appState.block, appState.session, appState.profile);
       const fresh = newActiveWorkout(built, appState.profile, appState.settings, appState.history);
       appState.setActive(fresh);
-      return fresh;
-    });
+      setWo(fresh);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
