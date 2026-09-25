@@ -6,16 +6,16 @@ import { firstDayGym, unit, weekOf, weeksPerBlock } from "../lib/gymProgram";
 import { buildSessionForProfile, lastFor, nextTrainingDay } from "../lib/sessionEngine";
 import { useAppState } from "../lib/appState";
 import Card from "../components/Card";
+import Sheet from "../components/workout/Sheet";
 import WorkoutScreen from "./WorkoutScreen";
 
 const PLAN_DAYS = [0, 2, 4]; // Mon / Wed / Fri, 0 = Monday
 const DAY_LETTERS = ["M", "T", "W", "T", "F", "S", "S"];
 
-function greeting() {
+function greeting(name: string) {
   const hour = new Date().getHours();
-  if (hour < 12) return "Morning.";
-  if (hour < 18) return "Afternoon.";
-  return "Evening.";
+  const period = hour < 12 ? "Morning" : hour < 18 ? "Afternoon" : "Evening";
+  return name ? `${period}, ${name}.` : `${period}.`;
 }
 function todayDate() {
   return new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
@@ -29,6 +29,7 @@ export default function TodayScreen() {
   const { colors } = useTheme();
   const appState = useAppState();
   const [workoutOpen, setWorkoutOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const dow = (new Date().getDay() + 6) % 7;
 
   const done = appState.history.length;
@@ -40,13 +41,15 @@ export default function TodayScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
-      <Header colors={colors} weekFilled={weekFilled} streak={appState.streak} />
+      <Header colors={colors} weekFilled={weekFilled} streak={appState.streak} onAvatarPress={() => setAccountOpen(true)} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.greet}>
           <Text style={[styles.date, { color: colors.muted, fontFamily: fonts.bodyBold }]}>
             {todayDate().toUpperCase()}
           </Text>
-          <Text style={[styles.greetTitle, { color: colors.ink, fontFamily: fonts.display }]}>{greeting()}</Text>
+          <Text style={[styles.greetTitle, { color: colors.ink, fontFamily: fonts.display }]}>
+            {greeting(appState.profile.name)}
+          </Text>
         </View>
 
         <WeekStrip dow={dow} colors={colors} history={appState.history} />
@@ -83,6 +86,24 @@ export default function TodayScreen() {
       </ScrollView>
 
       <WorkoutScreen visible={workoutOpen} onClose={() => setWorkoutOpen(false)} />
+
+      <Sheet visible={accountOpen} onClose={() => setAccountOpen(false)}>
+        <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display, marginBottom: 8 }]}>
+          {appState.profile.name || "Your account"}
+        </Text>
+        {appState.userEmail ? (
+          <Text style={[styles.note, { color: colors.muted, marginBottom: spacing.md }]}>{appState.userEmail}</Text>
+        ) : null}
+        <TouchableOpacity
+          style={[styles.signOutBtn, { borderColor: colors.bad }]}
+          onPress={() => {
+            setAccountOpen(false);
+            appState.signOut();
+          }}
+        >
+          <Text style={{ color: colors.bad, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>Sign out</Text>
+        </TouchableOpacity>
+      </Sheet>
     </SafeAreaView>
   );
 }
@@ -91,10 +112,12 @@ function Header({
   colors,
   weekFilled,
   streak,
+  onAvatarPress,
 }: {
   colors: ReturnType<typeof useTheme>["colors"];
   weekFilled: number;
   streak: number;
+  onAvatarPress: () => void;
 }) {
   const total = weeksPerBlock();
   return (
@@ -115,9 +138,9 @@ function Header({
             <Text style={{ color: colors.accent, fontFamily: fonts.bodyBold, fontSize: 13 }}>{streak} in a row</Text>
           </View>
         ) : null}
-        <View style={[styles.avatar, { backgroundColor: colors.ink }]}>
+        <TouchableOpacity style={[styles.avatar, { backgroundColor: colors.ink }]} onPress={onAvatarPress}>
           <Text style={[styles.avatarText, { color: colors.paper, fontFamily: fonts.display }]}>FT</Text>
-        </View>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -398,6 +421,7 @@ const styles = StyleSheet.create({
   accordionHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   accordionTitle: { fontSize: type.body },
   accordionBody: { fontSize: type.bodySmall, marginTop: 8, lineHeight: 18 },
+  signOutBtn: { borderWidth: 1, borderRadius: 13, padding: 14, alignItems: "center" },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 },
   infoIcon: { width: 32, height: 32, borderRadius: 9, alignItems: "center", justifyContent: "center" },
 });

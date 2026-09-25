@@ -13,6 +13,7 @@ import {
   step,
   unit,
 } from "./gymProgram";
+import * as Crypto from "expo-crypto";
 import { ActiveMove, ActiveWorkout, HistoryEntry, HistoryMove, Profile, Settings } from "./types";
 
 export const MOVE_TAGS = ["Form felt off", "Joint ache", "Machine confusing", "Grip gave out", "Felt great"];
@@ -309,6 +310,7 @@ export function woElapsedMin(wo: ActiveWorkout): number {
 export function logSessionEntry(wo: ActiveWorkout): HistoryEntry {
   const real = wo.moves.filter((m) => m.n !== "Warm-up");
   const entry: HistoryEntry = {
+    id: Crypto.randomUUID(),
     block: wo.block,
     idx: wo.idx,
     letter: wo.letter,

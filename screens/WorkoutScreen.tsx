@@ -13,6 +13,7 @@ import {
   guessStart,
   isWarmup,
   logSessionEntry,
+  moveDone,
   moveNo,
   moveSummary,
   newActiveWorkout,
@@ -265,7 +266,7 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
             <View style={styles.dots}>
               {wo.moves.map((m, i) => {
                 const here = i === wo.mi;
-                const bg = here ? colors.accent : m.skipped ? colors.muted : m.done.length >= m.sets && !!m.feel ? colors.good : colors.line;
+                const bg = here ? colors.accent : m.skipped ? colors.muted : moveDone(m) ? colors.good : colors.line;
                 return (
                   <TouchableOpacity key={i} style={styles.dotWrap} onPress={() => goMove(i)}>
                     <View style={[styles.dot, { backgroundColor: bg, opacity: m.skipped && !here ? 0.45 : 1 }]} />

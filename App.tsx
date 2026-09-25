@@ -1,32 +1,50 @@
 import { useCallback, useEffect } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { ThemeProvider, useTheme } from "./lib/ThemeContext";
-import { AppStateProvider } from "./lib/appState";
+import { AppStateProvider, useAppState } from "./lib/appState";
+import { isSupabaseConfigured } from "./lib/supabase";
 import { useAppFonts } from "./lib/fonts";
+import { fonts } from "./lib/theme";
 import TodayScreen from "./screens/TodayScreen";
+import AuthScreen from "./screens/AuthScreen";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function Root() {
   const { scheme, colors } = useTheme();
+  const appState = useAppState();
   const [fontsLoaded] = useAppFonts();
 
   const hideSplash = useCallback(async () => {
-    if (fontsLoaded) await SplashScreen.hideAsync();
-  }, [fontsLoaded]);
+    if (fontsLoaded && !appState.authLoading) await SplashScreen.hideAsync();
+  }, [fontsLoaded, appState.authLoading]);
 
   useEffect(() => {
     hideSplash();
   }, [hideSplash]);
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded || appState.authLoading) return null;
+
+  if (!isSupabaseConfigured) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.paper, alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <Text style={{ color: colors.ink, fontFamily: fonts.display, fontSize: 28, marginBottom: 12, textAlign: "center" }}>
+          Missing Supabase keys
+        </Text>
+        <Text style={{ color: colors.ink2, fontSize: 14, textAlign: "center", lineHeight: 20 }}>
+          Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to a .env file at the project root, then
+          restart the dev server.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.paper }}>
       <StatusBar style={scheme === "dark" ? "light" : "dark"} />
-      <TodayScreen />
+      {appState.userId ? <TodayScreen /> : <AuthScreen />}
     </View>
   );
 }

@@ -32,6 +32,7 @@ export type HistoryMove = {
 };
 
 export type HistoryEntry = {
+  id: string; // client-generated UUID — the sync identity for this record
   block: number;
   idx: number;
   letter: Letter;
