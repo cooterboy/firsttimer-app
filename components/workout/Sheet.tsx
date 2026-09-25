@@ -1,5 +1,5 @@
 import React from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useTheme } from "../../lib/ThemeContext";
 import { radius } from "../../lib/theme";
 
@@ -13,16 +13,18 @@ export default function Sheet({ visible, onClose, children }: Props) {
   const { colors } = useTheme();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={{ width: "100%" }}>
-          <View style={[styles.sheet, { backgroundColor: colors.raised, borderColor: colors.line }]}>
-            <View style={[styles.grip, { backgroundColor: colors.line }]} />
-            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-              {children}
-            </ScrollView>
-          </View>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <Pressable style={styles.backdrop} onPress={onClose}>
+          <Pressable style={{ width: "100%" }}>
+            <View style={[styles.sheet, { backgroundColor: colors.raised, borderColor: colors.line }]}>
+              <View style={[styles.grip, { backgroundColor: colors.line }]} />
+              <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+                {children}
+              </ScrollView>
+            </View>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
