@@ -1,0 +1,254 @@
+import React, { useState } from "react";
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { useTheme } from "../lib/ThemeContext";
+import { fonts, spacing, type } from "../lib/theme";
+import { useAppState } from "../lib/appState";
+import { unit } from "../lib/gymProgram";
+import { Goal } from "../lib/types";
+import { supabase } from "../lib/supabase";
+
+const GOAL_LABEL: Record<Goal, string> = {
+  lose: "Lose fat",
+  build: "Build muscle",
+  energy: "Feel stronger day to day",
+  habit: "Build the habit",
+  confidence: "Feel at home in a gym",
+  event: "Training for an event",
+};
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 1, fontWeight: "700", color: colors.muted, marginBottom: 7 }}>
+        {label}
+      </Text>
+      {children}
+    </View>
+  );
+}
+
+export default function AccountScreen() {
+  const { colors } = useTheme();
+  const appState = useAppState();
+  const navigation = useNavigation<any>();
+  const u = unit(appState.profile.units);
+
+  const [name, setName] = useState(appState.profile.name);
+  const [age, setAge] = useState(appState.profile.age ? String(appState.profile.age) : "");
+  const [weight, setWeight] = useState(appState.profile.weight ? String(appState.profile.weight) : "");
+  const isMetric = appState.profile.units === "metric";
+  const [heightCm, setHeightCm] = useState(appState.profile.heightCm ? String(appState.profile.heightCm) : "");
+  const [heightFt, setHeightFt] = useState(
+    appState.profile.heightCm ? String(Math.floor(appState.profile.heightCm / 2.54 / 12)) : ""
+  );
+  const [heightIn, setHeightIn] = useState(
+    appState.profile.heightCm ? String(Math.round((appState.profile.heightCm / 2.54) % 12)) : ""
+  );
+  const [goal, setGoal] = useState<Goal | null>(appState.profile.goal);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const save = () => {
+    const nextHeightCm = isMetric
+      ? Number(heightCm) || null
+      : Number(heightFt) || Number(heightIn)
+      ? (Number(heightFt) || 0) * 12 * 2.54 + (Number(heightIn) || 0) * 2.54
+      : null;
+    appState.updateProfile({
+      name: name.trim() || appState.profile.name,
+      age: Number(age) || null,
+      weight: Number(weight) || null,
+      heightCm: nextHeightCm,
+      goal,
+    });
+    Alert.alert("Saved");
+  };
+
+  const confirmDelete = async () => {
+    setDeleting(true);
+    try {
+      const { error } = await supabase.functions.invoke("delete-account");
+      if (error) throw error;
+      await appState.signOut();
+    } catch (e: any) {
+      setDeleting(false);
+      Alert.alert(
+        "Couldn't delete",
+        "The delete-account function isn't reachable yet — see supabase/functions/delete-account for deploy instructions."
+      );
+    }
+  };
+
+  return (
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
+      <View style={styles.topBar}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={{ color: colors.ink, fontSize: 20 }}>‹</Text>
+        </TouchableOpacity>
+        <Text style={[styles.topTitle, { color: colors.ink, fontFamily: fonts.bodyBold }]}>Account</Text>
+        <View style={styles.backBtn} />
+      </View>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <Field label="First name">
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            style={[styles.input, { color: colors.ink, backgroundColor: colors.sunken }]}
+          />
+        </Field>
+        <Field label="Email">
+          <View style={[styles.input, { backgroundColor: colors.sunken, justifyContent: "center" }]}>
+            <Text style={{ color: colors.muted, fontSize: 16 }}>{appState.userEmail}</Text>
+          </View>
+        </Field>
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <Field label="Age">
+              <TextInput
+                value={age}
+                onChangeText={setAge}
+                keyboardType="number-pad"
+                style={[styles.input, { color: colors.ink, backgroundColor: colors.sunken }]}
+              />
+            </Field>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field label={`Weight (${u})`}>
+              <TextInput
+                value={weight}
+                onChangeText={setWeight}
+                keyboardType="decimal-pad"
+                placeholder="optional"
+                placeholderTextColor={colors.muted}
+                style={[styles.input, { color: colors.ink, backgroundColor: colors.sunken }]}
+              />
+            </Field>
+          </View>
+        </View>
+        {isMetric ? (
+          <Field label="Height (cm)">
+            <TextInput
+              value={heightCm}
+              onChangeText={setHeightCm}
+              keyboardType="number-pad"
+              placeholder="optional"
+              placeholderTextColor={colors.muted}
+              style={[styles.input, { color: colors.ink, backgroundColor: colors.sunken }]}
+            />
+          </Field>
+        ) : (
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Field label="Height (ft)">
+                <TextInput
+                  value={heightFt}
+                  onChangeText={setHeightFt}
+                  keyboardType="number-pad"
+                  placeholder="5"
+                  placeholderTextColor={colors.muted}
+                  style={[styles.input, { color: colors.ink, backgroundColor: colors.sunken }]}
+                />
+              </Field>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Field label="(in)">
+                <TextInput
+                  value={heightIn}
+                  onChangeText={setHeightIn}
+                  keyboardType="number-pad"
+                  placeholder="9"
+                  placeholderTextColor={colors.muted}
+                  style={[styles.input, { color: colors.ink, backgroundColor: colors.sunken }]}
+                />
+              </Field>
+            </View>
+          </View>
+        )}
+        <Text style={[styles.note, { color: colors.muted }]}>
+          Weight and height feed the recovery numbers under Account. Only you see them.
+        </Text>
+
+        <Text style={[styles.eyebrow, { color: colors.muted }]}>GOAL</Text>
+        <View style={styles.pillWrap}>
+          {(Object.keys(GOAL_LABEL) as Goal[]).map((g) => {
+            const on = goal === g;
+            return (
+              <TouchableOpacity
+                key={g}
+                onPress={() => setGoal(on ? null : g)}
+                style={[styles.pill, { borderColor: on ? colors.ink : colors.line, backgroundColor: on ? colors.ink : colors.raised }]}
+              >
+                <Text style={{ color: on ? colors.paper : colors.ink, fontSize: 13, fontFamily: fonts.bodySemiBold }}>
+                  {GOAL_LABEL[g]}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <TouchableOpacity style={[styles.primary, { backgroundColor: colors.ink, marginTop: spacing.lg }]} onPress={save}>
+          <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 15 }}>Save</Text>
+        </TouchableOpacity>
+
+        <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.xl }]}>SIGN-IN</Text>
+        <TouchableOpacity
+          style={[styles.row, { borderColor: colors.line }]}
+          onPress={async () => {
+            await appState.signOut();
+          }}
+        >
+          <Text style={{ color: colors.ink, fontSize: 14, fontFamily: fonts.bodySemiBold }}>Sign out</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>Your data stays synced. Sign back in anytime.</Text>
+        </TouchableOpacity>
+
+        <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.xl }]}>DANGER ZONE</Text>
+        <View style={[styles.dangerCard, { borderColor: colors.bad }]}>
+          <Text style={{ color: colors.ink2, fontSize: 12, lineHeight: 18, marginBottom: 10 }}>
+            Deleting removes your profile and every logged session. There's no undo.
+          </Text>
+          {!confirmingDelete ? (
+            <TouchableOpacity style={[styles.ghostDanger, { borderColor: colors.bad }]} onPress={() => setConfirmingDelete(true)}>
+              <Text style={{ color: colors.bad, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>Delete my account and data</Text>
+            </TouchableOpacity>
+          ) : (
+            <>
+              <Text style={{ color: colors.bad, fontSize: 12, marginBottom: 10 }}>This wipes everything. There's no undo.</Text>
+              <TouchableOpacity
+                disabled={deleting}
+                style={[styles.ghostDanger, { borderColor: colors.bad, opacity: deleting ? 0.6 : 1 }]}
+                onPress={confirmDelete}
+              >
+                <Text style={{ color: colors.bad, fontFamily: fonts.bodyBold, fontSize: 13 }}>
+                  {deleting ? "Deleting…" : "Yes, delete it all"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.ghostDanger, { borderColor: colors.line, marginTop: 8 }]} onPress={() => setConfirmingDelete(false)}>
+                <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>Keep my account</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1 },
+  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.sm },
+  backBtn: { width: 30, height: 30, alignItems: "center", justifyContent: "center" },
+  topTitle: { fontSize: 15 },
+  scroll: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
+  input: { padding: 13, fontSize: 16, borderRadius: 11 },
+  note: { fontSize: 12, lineHeight: 17, marginTop: -6, marginBottom: 16 },
+  eyebrow: { fontSize: 11, textTransform: "uppercase", letterSpacing: 1, fontWeight: "700", marginBottom: 8 },
+  pillWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  pill: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999, borderWidth: 1 },
+  primary: { borderRadius: 13, padding: 16, alignItems: "center" },
+  row: { borderWidth: 1, borderRadius: 13, padding: 14 },
+  dangerCard: { borderWidth: 1, borderRadius: 13, padding: 14 },
+  ghostDanger: { borderWidth: 1, borderRadius: 13, padding: 13, alignItems: "center" },
+});

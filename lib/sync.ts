@@ -14,6 +14,10 @@ type ProfileRow = {
   reps: string;
   length: number;
   pain: string[];
+  age: number | null;
+  height_cm: number | null;
+  weight: number | null;
+  goal: string | null;
   block: number;
   session: number;
   streak: number;
@@ -76,6 +80,10 @@ export async function fetchRemoteState(userId: string): Promise<RemoteState | nu
       reps: (profileRow.reps as Profile["reps"]) || "balanced",
       length: profileRow.length || 45,
       pain: profileRow.pain || [],
+      age: profileRow.age,
+      heightCm: profileRow.height_cm,
+      weight: profileRow.weight,
+      goal: (profileRow.goal as Profile["goal"]) || null,
     },
     block: profileRow.block || 1,
     session: profileRow.session || 0,
@@ -98,6 +106,10 @@ export async function pushProfile(
     reps: profile.reps,
     length: profile.length,
     pain: profile.pain,
+    age: profile.age,
+    height_cm: profile.heightCm,
+    weight: profile.weight,
+    goal: profile.goal,
     block: meta.block,
     session: meta.session,
     streak: meta.streak,

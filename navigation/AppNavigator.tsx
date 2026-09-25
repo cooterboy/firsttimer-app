@@ -5,6 +5,7 @@ import TabBar from "../components/TabBar";
 import TodayScreen from "../screens/TodayScreen";
 import ProgressScreen from "../screens/ProgressScreen";
 import YouScreen from "../screens/YouScreen";
+import AccountScreen from "../screens/AccountScreen";
 
 const Tab = createBottomTabNavigator();
 const TodayStack = createNativeStackNavigator();
@@ -31,6 +32,7 @@ function YouStackScreen() {
   return (
     <YouStack.Navigator screenOptions={{ headerShown: false }}>
       <YouStack.Screen name="YouRoot" component={YouScreen} />
+      <YouStack.Screen name="Account" component={AccountScreen} options={{ presentation: "card" }} />
     </YouStack.Navigator>
   );
 }

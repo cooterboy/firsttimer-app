@@ -1,6 +1,7 @@
 import { BaseMovement, Letter, MovementType, RepStyleKey } from "./gymProgram";
 
 export type Units = "imperial" | "metric";
+export type Goal = "lose" | "build" | "energy" | "habit" | "confidence" | "event";
 
 export type Profile = {
   name: string;
@@ -9,6 +10,10 @@ export type Profile = {
   reps: RepStyleKey;
   length: number; // minutes: 30 | 45 | 60
   pain: string[]; // e.g. ["knees", "back", "shoulders"]
+  age: number | null;
+  heightCm: number | null;
+  weight: number | null; // in the profile's current `units`, like the prototype
+  goal: Goal | null;
 };
 
 export type Settings = {

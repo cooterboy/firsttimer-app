@@ -18,6 +18,10 @@ const defaultProfile: Profile = {
   reps: "balanced",
   length: 45,
   pain: [],
+  age: null,
+  heightCm: null,
+  weight: null,
+  goal: null,
 };
 
 const defaultSettings: Settings = {
@@ -53,6 +57,7 @@ type AppStateContextValue = AppState & {
   resetPassword: (email: string) => Promise<{ error: string | null }>;
   resetTestData: () => Promise<void>;
   devSeedNearBlockEnd: () => void;
+  updateProfile: (patch: Partial<Profile>) => void;
 };
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
@@ -181,6 +186,21 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateProfile = (patch: Partial<Profile>) => {
+    setProfile((p) => {
+      const next = { ...p, ...patch };
+      if (userId) {
+        pushProfile(userId, next, {
+          block: latest.current.block,
+          session: latest.current.session,
+          streak: latest.current.streak,
+          lastDate: latest.current.lastDate,
+        }).catch((e) => console.warn("Profile save failed, staying local:", e));
+      }
+      return next;
+    });
+  };
+
   const updateHistoryEntry = (blockN: number, idx: number, patch: Partial<HistoryEntry>) => {
     setHistory((h) =>
       h.map((e) => {
@@ -266,6 +286,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       resetPassword,
       resetTestData,
       devSeedNearBlockEnd: devSeedNearBlockEndFn,
+      updateProfile,
     }),
     [profile, settings, block, session, history, streak, lastDate, active, userId, userEmail, authLoading]
   );
