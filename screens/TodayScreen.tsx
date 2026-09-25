@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, radius, spacing, type } from "../lib/theme";
 import { firstDayGym, unit, weekOf, weeksPerBlock } from "../lib/gymProgram";
@@ -31,6 +32,7 @@ export default function TodayScreen() {
   const appState = useAppState();
   const workoutModal = useWorkoutModal();
   const navigation = useNavigation<any>();
+  const tabBarHeight = useBottomTabBarHeight();
   const dow = (new Date().getDay() + 6) % 7;
 
   const done = appState.history.length;
@@ -48,7 +50,10 @@ export default function TodayScreen() {
         streak={appState.streak}
         onAvatarPress={() => navigation.navigate("You")}
       />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: tabBarHeight + spacing.lg }]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.greet}>
           <Text style={[styles.date, { color: colors.muted, fontFamily: fonts.bodyBold }]}>
             {todayDate().toUpperCase()}
