@@ -30,7 +30,9 @@ import FinishView from "../components/workout/FinishView";
 import Sheet from "../components/workout/Sheet";
 import WorkoutSheetRouter from "../components/workout/WorkoutSheets";
 
-const REST_FLOOR = 15;
+// Real product rule: 15s floor so the last set of a rest period doesn't get rushed.
+// Skipped in dev builds only, so testing isn't slowed down by it.
+const REST_FLOOR = __DEV__ ? 0 : 15;
 
 export default function WorkoutScreen({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { colors } = useTheme();
