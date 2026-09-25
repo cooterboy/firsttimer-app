@@ -66,7 +66,13 @@ export default function TodayScreen() {
         <WeekStrip dow={dow} colors={colors} history={appState.history} />
 
         {trainedToday && !resume ? (
-          <DoneForTodayCard colors={colors} block={appState.block} session={appState.session} profile={appState.profile} />
+          <DoneForTodayCard
+            colors={colors}
+            block={appState.block}
+            session={appState.session}
+            profile={appState.profile}
+            history={appState.history}
+          />
         ) : (
           <SessionCard colors={colors} built={built} history={appState.history} units={appState.profile.units} resume={resume} />
         )}
@@ -199,14 +205,17 @@ function DoneForTodayCard({
   block,
   session,
   profile,
+  history,
 }: {
   colors: ReturnType<typeof useTheme>["colors"];
   block: number;
   session: number;
   profile: ReturnType<typeof useAppState>["profile"];
+  history: ReturnType<typeof useAppState>["history"];
 }) {
   const nt = nextTrainingDay();
   const next = buildSessionForProfile(block, session, profile);
+  const last = history[history.length - 1];
   return (
     <Card style={styles.sessionCard}>
       <View style={[styles.sessionTop, { backgroundColor: colors.ink }]}>
@@ -221,9 +230,24 @@ function DoneForTodayCard({
         </Text>
       </View>
       <View style={styles.moveList}>
-        <View style={styles.moveRow}>
-          <View style={[styles.thumb, { backgroundColor: colors.good }]}>
-            <Text style={{ color: "#fff" }}>✓</Text>
+        {last ? (
+          <View style={styles.moveRow}>
+            <View style={[styles.thumb, { backgroundColor: colors.good }]}>
+              <Text style={{ color: "#fff" }}>✓</Text>
+            </View>
+            <View style={styles.moveText}>
+              <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>
+                Session {last.idx + 1} logged
+              </Text>
+              <Text style={[styles.moveCue, { color: colors.muted }]}>
+                {Object.keys(last.moves).length} movements{last.minutes ? ` · ${last.minutes} min` : ""}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+        <View style={[styles.moveRow, last && { borderTopWidth: 1, borderTopColor: colors.line }]}>
+          <View style={[styles.thumb, { backgroundColor: colors.sunken }]}>
+            <Text style={{ color: colors.muted }}>▶</Text>
           </View>
           <View style={styles.moveText}>
             <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>
