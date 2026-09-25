@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { ThemeProvider, useTheme } from "./lib/ThemeContext";
+import { AppStateProvider } from "./lib/appState";
 import { useAppFonts } from "./lib/fonts";
 import TodayScreen from "./screens/TodayScreen";
 
@@ -33,7 +34,9 @@ function Root() {
 export default function App() {
   return (
     <ThemeProvider>
-      <Root />
+      <AppStateProvider>
+        <Root />
+      </AppStateProvider>
     </ThemeProvider>
   );
 }
