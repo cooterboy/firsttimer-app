@@ -1,5 +1,5 @@
 import React from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useTheme } from "../lib/ThemeContext";
@@ -29,7 +29,10 @@ export default function YouScreen() {
           <>
             <TouchableOpacity
               style={[styles.btn, { borderColor: colors.line, marginTop: spacing.sm }]}
-              onPress={() => appState.resetTestData()}
+              onPress={async () => {
+                await appState.resetTestData();
+                Alert.alert("Reset", "Test data cleared. Switch to Today to see it.");
+              }}
             >
               <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>
                 Reset test data (dev only)
@@ -37,7 +40,10 @@ export default function YouScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.btn, { borderColor: colors.line, marginTop: spacing.sm }]}
-              onPress={() => appState.devSeedNearBlockEnd()}
+              onPress={() => {
+                appState.devSeedNearBlockEnd();
+                Alert.alert("Seeded", "23 sessions seeded. Switch to Today — session 24 should be waiting.");
+              }}
             >
               <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>
                 Seed to session 24 (dev only)

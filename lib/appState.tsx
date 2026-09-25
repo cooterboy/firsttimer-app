@@ -208,7 +208,13 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetTestData = async () => {
-    if (userId) await resetTestDataRemote(userId);
+    if (userId) {
+      try {
+        await resetTestDataRemote(userId);
+      } catch (e) {
+        console.warn("Remote reset failed, resetting local state anyway:", e);
+      }
+    }
     setHistory([]);
     setBlock(1);
     setSession(0);
