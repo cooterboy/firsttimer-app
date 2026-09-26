@@ -45,6 +45,7 @@ create table if not exists sessions (
   minutes int not null default 0,
   tags text[] not null default '{}',
   rating int,
+  backfilled boolean not null default false,
   updated_at timestamptz not null default now()
 );
 

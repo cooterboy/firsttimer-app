@@ -37,6 +37,7 @@ type SessionRow = {
   minutes: number;
   tags: string[] | null;
   rating: number | null;
+  backfilled: boolean | null;
 };
 
 export type RemoteState = {
@@ -62,6 +63,7 @@ function rowToHistoryEntry(row: SessionRow): HistoryEntry {
     minutes: row.minutes || 0,
     tags: row.tags || [],
     rating: row.rating ?? undefined,
+    backfilled: row.backfilled ?? undefined,
   };
 }
 
@@ -141,6 +143,7 @@ export async function pushSession(userId: string, entry: HistoryEntry) {
     minutes: entry.minutes,
     tags: entry.tags || [],
     rating: entry.rating ?? null,
+    backfilled: entry.backfilled ?? false,
     updated_at: new Date().toISOString(),
   };
   const { error } = await supabase.from("sessions").upsert(row);

@@ -50,6 +50,7 @@ export type HistoryEntry = {
   minutes: number;
   tags?: string[];
   rating?: number;
+  backfilled?: boolean;
 };
 
 // A movement inside an in-progress workout (prototype's wo.moves[i]).

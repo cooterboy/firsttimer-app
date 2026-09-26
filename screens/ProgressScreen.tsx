@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useNavigation } from "@react-navigation/native";
 import Svg, { Line, Rect, Text as SvgText } from "react-native-svg";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing, type } from "../lib/theme";
@@ -16,6 +17,7 @@ import SessionDetailSheet from "../components/SessionDetailSheet";
 export default function ProgressScreen() {
   const { colors } = useTheme();
   const appState = useAppState();
+  const navigation = useNavigation<any>();
   const tabBarHeight = useBottomTabBarHeight();
   const { history, streak, block, session, profile } = appState;
   const [openKey, setOpenKey] = useState<{ block: number; idx: number } | null>(null);
@@ -42,6 +44,7 @@ export default function ProgressScreen() {
               history={history}
               units={profile.units}
               onOpen={(h) => setOpenKey({ block: h.block, idx: h.idx })}
+              onBackfill={() => navigation.navigate("Backfill")}
             />
           </>
         )}
@@ -221,11 +224,13 @@ function History({
   history,
   units,
   onOpen,
+  onBackfill,
 }: {
   colors: ReturnType<typeof useTheme>["colors"];
   history: ReturnType<typeof useAppState>["history"];
   units: "imperial" | "metric";
   onOpen: (entry: HistoryEntry) => void;
+  onBackfill: () => void;
 }) {
   const sorted = [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   return (
@@ -277,6 +282,11 @@ function History({
           </TouchableOpacity>
         );
       })}
+      <TouchableOpacity style={[styles.ghostBtn, { borderColor: colors.line }]} onPress={onBackfill}>
+        <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>
+          Add a session I forgot
+        </Text>
+      </TouchableOpacity>
     </Card>
   );
 }
@@ -303,4 +313,5 @@ const styles = StyleSheet.create({
   histNote: { fontSize: 12, marginTop: 4, fontStyle: "italic" },
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
   tagBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  ghostBtn: { borderWidth: 1, borderRadius: 13, padding: 13, alignItems: "center", marginTop: 16 },
 });

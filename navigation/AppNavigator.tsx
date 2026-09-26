@@ -8,6 +8,7 @@ import YouScreen from "../screens/YouScreen";
 import AccountScreen from "../screens/AccountScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 import TrainingPreferencesScreen from "../screens/TrainingPreferencesScreen";
+import BackfillScreen from "../screens/BackfillScreen";
 
 const Tab = createBottomTabNavigator();
 const TodayStack = createNativeStackNavigator();
@@ -27,6 +28,7 @@ function ProgressStackScreen() {
   return (
     <ProgressStack.Navigator screenOptions={{ headerShown: false }}>
       <ProgressStack.Screen name="ProgressRoot" component={ProgressScreen} />
+      <ProgressStack.Screen name="Backfill" component={BackfillScreen} options={{ presentation: "card" }} />
     </ProgressStack.Navigator>
   );
 }

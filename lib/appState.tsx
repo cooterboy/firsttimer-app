@@ -52,6 +52,7 @@ type AppState = {
 type AppStateContextValue = AppState & {
   setActive: (wo: ActiveWorkout | null) => void;
   commitSession: (entry: HistoryEntry) => void;
+  commitBackfill: (entry: HistoryEntry) => void;
   advanceBlock: () => void;
   updateHistoryEntry: (block: number, idx: number, patch: Partial<HistoryEntry>) => void;
   signUp: (email: string, password: string, name: string, units: Profile["units"]) => Promise<{ error: string | null; needsEmailConfirm: boolean }>;
@@ -190,6 +191,30 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         }).catch((e) => console.warn("Profile save failed, staying local:", e));
       }
       return [...h, entry];
+    });
+  };
+
+  // prototype's SUB.backfill submit handler: same session-position bump as a real
+  // session, but streak is a flat +1 (no gap check — you're telling it you trained,
+  // full stop) and lastDate only moves forward if the backfilled date is newer.
+  const commitBackfill = (entry: HistoryEntry) => {
+    setHistory((h) => {
+      if (h.some((x) => x.block === entry.block && x.idx === entry.idx)) return h;
+      const newStreak = streak + 1;
+      const newLastDate = !lastDate || new Date(entry.date) > new Date(lastDate) ? entry.date : lastDate;
+      setStreak(newStreak);
+      setLastDate(newLastDate);
+      setSession((s) => s + 1);
+      if (userId) {
+        pushSession(userId, entry).catch((e) => console.warn("Backfill save failed, staying local:", e));
+        pushProfile(userId, latest.current.profile, {
+          block: latest.current.block,
+          session: latest.current.session + 1,
+          streak: newStreak,
+          lastDate: newLastDate,
+        }).catch((e) => console.warn("Profile save failed, staying local:", e));
+      }
+      return [...h, entry].sort((a, b) => a.block - b.block || a.idx - b.idx);
     });
   };
 
@@ -332,6 +357,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       syncError,
       setActive,
       commitSession,
+      commitBackfill,
       advanceBlock,
       updateHistoryEntry,
       signUp,

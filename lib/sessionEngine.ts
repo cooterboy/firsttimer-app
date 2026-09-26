@@ -634,3 +634,42 @@ export function nutritionCard(profile: Profile): NutritionCard {
   const calorieSub = cal ? GOAL_CAL_SUB[profile.goal || ""] || "Around maintenance." : "Fill in your details above, and this fills in.";
   return { protein, water, calorieLine, calorieSub, hasData: !!kg };
 }
+
+// ---- backfill: "trained and never opened the app" (prototype's SUB.backfill) ----
+// Always targets the CURRENT pending session (block/session), same as the prototype —
+// there's exactly one session you could plausibly have missed logging: the next one up.
+export function buildBackfillEntry(
+  block: number,
+  idx: number,
+  profile: Profile,
+  date: Date,
+  weightsByMove: Record<string, string>
+): HistoryEntry {
+  const built = buildSessionForProfile(block, idx, profile);
+  const moves: HistoryEntry["moves"] = {};
+  built.moves.forEach((m) => {
+    const w = (weightsByMove[m.n] || "").trim();
+    moves[m.n] = {
+      w,
+      setW: w ? Array.from({ length: m.sets }, () => w) : [],
+      feel: "",
+      sets: m.sets,
+      reps: Number((m.spec.match(/× (\d+)/) || [])[1]) || 0,
+      type: m.type,
+      note: "",
+      mtags: [],
+    };
+  });
+  return {
+    id: Crypto.randomUUID(),
+    block,
+    idx,
+    letter: built.letter,
+    week: built.week,
+    date: date.toISOString(),
+    moves,
+    note: "",
+    minutes: 0,
+    backfilled: true,
+  };
+}
