@@ -276,16 +276,38 @@ export function FindWeightSheetContent({
     );
   }
   return (
+    <FindWeightConfirm hint={hint} u={u} val={val} setVal={setVal} onSave={onSave} onClose={onClose} />
+  );
+}
+
+function FindWeightConfirm({
+  hint,
+  u,
+  val,
+  setVal,
+  onSave,
+  onClose,
+}: {
+  hint: WeightHint;
+  u: string;
+  val: string;
+  setVal: (v: string) => void;
+  onSave: (value: number) => void;
+  onClose: () => void;
+}) {
+  const { colors } = useTheme();
+  return (
     <View>
       <SheetTitle>That's your weight.</SheetTitle>
       <SheetBody>Put the number in and it fills every set. Next time the app remembers it and suggests going up.</SheetBody>
-      <Text style={[styles.fieldLabel, { color: "#8A8272" }]}>WHAT ARE YOU ON? ({u})</Text>
+      <Text style={[styles.fieldLabel, { color: colors.muted }]}>WHAT ARE YOU ON? ({u})</Text>
       <TextInput
         value={val}
         onChangeText={setVal}
         keyboardType="decimal-pad"
         placeholder={u}
-        style={styles.input}
+        placeholderTextColor={colors.muted}
+        style={[styles.input, { color: colors.ink, backgroundColor: colors.sunken }]}
         autoFocus
       />
       <Opt
