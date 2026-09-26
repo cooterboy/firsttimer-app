@@ -14,6 +14,9 @@ create table if not exists mobility_logs (
 
 alter table mobility_logs enable row level security;
 
+-- drop-then-create so this migration can be pasted more than once safely
+-- (Postgres has no "create policy if not exists").
+drop policy if exists "mobility_logs are self-owned" on mobility_logs;
 create policy "mobility_logs are self-owned" on mobility_logs
   for all
   using (auth.uid() = user_id)
@@ -32,6 +35,7 @@ create table if not exists walks (
 
 alter table walks enable row level security;
 
+drop policy if exists "walks are self-owned" on walks;
 create policy "walks are self-owned" on walks
   for all
   using (auth.uid() = user_id)
