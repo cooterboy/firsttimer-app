@@ -1,4 +1,5 @@
 import "react-native-url-polyfill/auto";
+import { AppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 
@@ -17,3 +18,17 @@ export const supabase = createClient(url || "https://placeholder.supabase.co", a
     detectSessionInUrl: false,
   },
 });
+
+// Supabase-recommended wiring: without this, token auto-refresh keeps trying on a
+// background/suspended JS timer and can miss its window, so reopening the app after
+// it's been backgrounded a while can briefly look "logged out" until the next network
+// call happens to trigger a refresh. Foregrounding now kicks a refresh immediately.
+if (isSupabaseConfigured) {
+  AppState.addEventListener("change", (state) => {
+    if (state === "active") {
+      supabase.auth.startAutoRefresh();
+    } else {
+      supabase.auth.stopAutoRefresh();
+    }
+  });
+}
