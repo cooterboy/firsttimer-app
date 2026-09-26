@@ -1,5 +1,5 @@
-import React from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import Svg, { Line, Rect, Text as SvgText } from "react-native-svg";
@@ -8,14 +8,18 @@ import { fonts, spacing, type } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import { BLOCK_SESSIONS, daysPer, unit, weekOf, weeksPerBlock } from "../lib/gymProgram";
 import { fmtDate, historyMovedTotal, movedLabel, setsSummary } from "../lib/sessionEngine";
+import { HistoryEntry } from "../lib/types";
 import AppHeader from "../components/AppHeader";
 import Card from "../components/Card";
+import SessionDetailSheet from "../components/SessionDetailSheet";
 
 export default function ProgressScreen() {
   const { colors } = useTheme();
   const appState = useAppState();
   const tabBarHeight = useBottomTabBarHeight();
   const { history, streak, block, session, profile } = appState;
+  const [openKey, setOpenKey] = useState<{ block: number; idx: number } | null>(null);
+  const openEntry = openKey ? history.find((h) => h.block === openKey.block && h.idx === openKey.idx) || null : null;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]} edges={["top"]}>
@@ -33,10 +37,16 @@ export default function ProgressScreen() {
             <Overview colors={colors} history={history} streak={streak} units={profile.units} />
             <WeekChart colors={colors} history={history} />
             <Blocks colors={colors} block={block} session={session} history={history} />
-            <History colors={colors} history={history} units={profile.units} />
+            <History
+              colors={colors}
+              history={history}
+              units={profile.units}
+              onOpen={(h) => setOpenKey({ block: h.block, idx: h.idx })}
+            />
           </>
         )}
       </ScrollView>
+      <SessionDetailSheet entry={openEntry} units={profile.units} onClose={() => setOpenKey(null)} />
     </SafeAreaView>
   );
 }
@@ -210,10 +220,12 @@ function History({
   colors,
   history,
   units,
+  onOpen,
 }: {
   colors: ReturnType<typeof useTheme>["colors"];
   history: ReturnType<typeof useAppState>["history"];
   units: "imperial" | "metric";
+  onOpen: (entry: HistoryEntry) => void;
 }) {
   const sorted = [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   return (
@@ -230,7 +242,11 @@ function History({
           })
           .join(" · ");
         return (
-          <View key={h.id} style={[styles.histRow, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}>
+          <TouchableOpacity
+            key={h.id}
+            onPress={() => onOpen(h)}
+            style={[styles.histRow, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}
+          >
             <View style={styles.histTop}>
               <Text style={[styles.histTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>
                 Block {h.block} · Session {h.idx + 1} · {h.letter}
@@ -258,7 +274,7 @@ function History({
             ) : null}
             {h.note ? <Text style={[styles.histNote, { color: colors.ink2 }]}>"{h.note}"</Text> : null}
             {notes.length ? <Text style={[styles.histNote, { color: colors.ink2 }]}>{notes.join(" · ")}</Text> : null}
-          </View>
+          </TouchableOpacity>
         );
       })}
     </Card>
