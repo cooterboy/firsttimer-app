@@ -48,7 +48,13 @@ export default function BackfillScreen() {
   const u = unit(profile.units);
 
   const submit = () => {
-    if (date > new Date()) {
+    // Compare calendar dates, not exact timestamps — date is normalized to noon, so a
+    // straight ">" against the live clock would wrongly reject "today" before noon.
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const picked = new Date(date);
+    picked.setHours(0, 0, 0, 0);
+    if (picked > today) {
       Alert.alert("That day hasn't happened yet.");
       return;
     }
