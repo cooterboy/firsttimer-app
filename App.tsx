@@ -13,6 +13,8 @@ import { fonts } from "./lib/theme";
 import AppNavigator from "./navigation/AppNavigator";
 import AuthScreen from "./screens/AuthScreen";
 import WorkoutScreen from "./screens/WorkoutScreen";
+import MobilityScreen from "./screens/MobilityScreen";
+import WalkScreen from "./screens/WalkScreen";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -23,7 +25,9 @@ function MainApp() {
       <NavigationContainer>
         <AppNavigator />
       </NavigationContainer>
-      <WorkoutScreen visible={workoutModal.visible} onClose={workoutModal.close} />
+      <WorkoutScreen visible={workoutModal.kind === "workout"} onClose={workoutModal.close} />
+      <MobilityScreen visible={workoutModal.kind === "mobility"} onClose={workoutModal.close} />
+      <WalkScreen visible={workoutModal.kind === "walk"} onClose={workoutModal.close} />
     </>
   );
 }

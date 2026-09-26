@@ -1,10 +1,18 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "./supabase";
-import { fetchRemoteState, pushProfile, pushSession, pushSettings, resetTestData as resetTestDataRemote } from "./sync";
+import {
+  fetchRemoteState,
+  pushMobility,
+  pushProfile,
+  pushSession,
+  pushSettings,
+  pushWalk,
+  resetTestData as resetTestDataRemote,
+} from "./sync";
 import { loadCachedState, saveCachedState, type CachedState } from "./localCache";
 import { convertHistoryUnits, convertProfileWeight, devSeedNearBlockEnd } from "./sessionEngine";
-import { ActiveWorkout, HistoryEntry, Profile, Settings } from "./types";
+import { ActiveWorkout, HistoryEntry, MobilityEntry, Profile, Settings, WalkEntry } from "./types";
 
 // In-memory app state, mirroring the shape of the prototype's `state` object
 // (profile, settings, block/session position, history, streak, in-progress workout),
@@ -33,6 +41,7 @@ const defaultSettings: Settings = {
   weighin: true,
   reminders: true,
   remindTime: "7:00 am",
+  mobility: "weekly",
 };
 
 type AppState = {
@@ -41,6 +50,8 @@ type AppState = {
   block: number;
   session: number; // index within the block, 0-based
   history: HistoryEntry[];
+  mobility: MobilityEntry[];
+  walks: WalkEntry[];
   streak: number;
   lastDate: string | null;
   active: ActiveWorkout | null;
@@ -54,6 +65,9 @@ type AppStateContextValue = AppState & {
   setActive: (wo: ActiveWorkout | null) => void;
   commitSession: (entry: HistoryEntry) => void;
   commitBackfill: (entry: HistoryEntry) => void;
+  commitMobility: (entry: MobilityEntry) => void;
+  commitWalk: (entry: WalkEntry) => void;
+  updateWalkEntry: (id: string, patch: Partial<WalkEntry>) => void;
   advanceBlock: () => void;
   updateHistoryEntry: (block: number, idx: number, patch: Partial<HistoryEntry>) => void;
   signUp: (email: string, password: string, name: string, units: Profile["units"]) => Promise<{ error: string | null; needsEmailConfirm: boolean }>;
@@ -75,6 +89,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [block, setBlock] = useState(1);
   const [session, setSession] = useState(0);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [mobility, setMobility] = useState<MobilityEntry[]>([]);
+  const [walks, setWalks] = useState<WalkEntry[]>([]);
   const [streak, setStreak] = useState(0);
   const [lastDate, setLastDate] = useState<string | null>(null);
   const [active, setActive] = useState<ActiveWorkout | null>(null);
@@ -105,6 +121,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setBlock(1);
     setSession(0);
     setHistory([]);
+    setMobility([]);
+    setWalks([]);
     setStreak(0);
     setLastDate(null);
     setActive(null);
@@ -124,6 +142,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setStreak(s.streak);
     setLastDate(s.lastDate);
     setHistory(s.history);
+    setMobility(s.mobility);
+    setWalks(s.walks);
   };
 
   // The actual network fetch + reconcile. Never awaited by the boot sequence — it
@@ -213,8 +233,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   // to blank defaults can't clobber the real cached snapshot for that account.
   useEffect(() => {
     if (!userId || !bootSettled.current) return;
-    saveCachedState(userId, { profile, settings, block, session, streak, lastDate, history, active }).catch(() => {});
-  }, [userId, profile, settings, block, session, streak, lastDate, history, active]);
+    saveCachedState(userId, { profile, settings, block, session, streak, lastDate, history, mobility, walks, active }).catch(() => {});
+  }, [userId, profile, settings, block, session, streak, lastDate, history, mobility, walks, active]);
 
   // prototype's logSession(): push the entry once, bump streak/session/block position.
   const commitSession = (entry: HistoryEntry) => {
@@ -260,6 +280,32 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       }
       return [...h, entry].sort((a, b) => a.block - b.block || a.idx - b.idx);
     });
+  };
+
+  // Mobility days and walks/runs are logged separately from sessions on purpose —
+  // the streak, milestones and month-two number all measure lifting, and neither of
+  // these should ever be able to keep a lifting streak alive.
+  const commitMobility = (entry: MobilityEntry) => {
+    setMobility((m) => [...m, entry]);
+    if (userId) pushMobility(userId, entry).catch((e) => console.warn("Mobility save failed, staying local:", e));
+  };
+
+  const commitWalk = (entry: WalkEntry) => {
+    setWalks((w) => [...w, entry]);
+    if (userId) pushWalk(userId, entry).catch((e) => console.warn("Walk save failed, staying local:", e));
+  };
+
+  // Tapping "how did that feel" / "anything hurt" on the finish screen updates the
+  // same walk entry already committed above, then re-pushes it.
+  const updateWalkEntry = (id: string, patch: Partial<WalkEntry>) => {
+    setWalks((w) =>
+      w.map((x) => {
+        if (x.id !== id) return x;
+        const next = { ...x, ...patch };
+        if (userId) pushWalk(userId, next).catch((e) => console.warn("Walk update failed, staying local:", e));
+        return next;
+      })
+    );
   };
 
   const advanceBlock = () => {
@@ -367,6 +413,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       }
     }
     setHistory([]);
+    setMobility([]);
+    setWalks([]);
     setBlock(1);
     setSession(0);
     setStreak(0);
@@ -392,6 +440,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       block,
       session,
       history,
+      mobility,
+      walks,
       streak,
       lastDate,
       active,
@@ -402,6 +452,9 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       setActive,
       commitSession,
       commitBackfill,
+      commitMobility,
+      commitWalk,
+      updateWalkEntry,
       advanceBlock,
       updateHistoryEntry,
       signUp,
@@ -414,7 +467,22 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       setUnits,
       updateSettings,
     }),
-    [profile, settings, block, session, history, streak, lastDate, active, userId, userEmail, authLoading, syncError]
+    [
+      profile,
+      settings,
+      block,
+      session,
+      history,
+      mobility,
+      walks,
+      streak,
+      lastDate,
+      active,
+      userId,
+      userEmail,
+      authLoading,
+      syncError,
+    ]
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

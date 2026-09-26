@@ -4,7 +4,7 @@
 // commitSession/updateHistoryEntry runs.
 
 import { supabase } from "./supabase";
-import { HistoryEntry, Profile, Settings } from "./types";
+import { HistoryEntry, MobilityEntry, Profile, Settings, WalkEntry, WalkKind } from "./types";
 
 type ProfileRow = {
   id: string;
@@ -40,6 +40,21 @@ type SessionRow = {
   backfilled: boolean | null;
 };
 
+type MobilityRow = {
+  id: string;
+  date: string;
+  minutes: number;
+};
+
+type WalkRow = {
+  id: string;
+  date: string;
+  minutes: number;
+  kind: string;
+  feel: string | null;
+  hurt: string[] | null;
+};
+
 export type RemoteState = {
   profile: Profile;
   settings: Partial<Settings> | null;
@@ -48,6 +63,8 @@ export type RemoteState = {
   streak: number;
   lastDate: string | null;
   history: HistoryEntry[];
+  mobility: MobilityEntry[];
+  walks: WalkEntry[];
 };
 
 function rowToHistoryEntry(row: SessionRow): HistoryEntry {
@@ -67,6 +84,20 @@ function rowToHistoryEntry(row: SessionRow): HistoryEntry {
   };
 }
 
+function rowToMobilityEntry(row: MobilityRow): MobilityEntry {
+  return { id: row.id, date: row.date, minutes: row.minutes || 0 };
+}
+function rowToWalkEntry(row: WalkRow): WalkEntry {
+  return {
+    id: row.id,
+    date: row.date,
+    minutes: row.minutes || 0,
+    kind: (row.kind as WalkKind) || "walk",
+    feel: (row.feel as WalkEntry["feel"]) || "",
+    hurt: row.hurt || [],
+  };
+}
+
 export async function fetchRemoteState(userId: string): Promise<RemoteState | null> {
   const [{ data: profileRow, error: profileErr }, { data: sessionRows, error: sessionsErr }] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", userId).maybeSingle<ProfileRow>(),
@@ -75,6 +106,19 @@ export async function fetchRemoteState(userId: string): Promise<RemoteState | nu
   if (profileErr) throw profileErr;
   if (sessionsErr) throw sessionsErr;
   if (!profileRow) return null;
+
+  // Fetched separately, and never fatal to the rest of hydrate: these tables are
+  // newer (migration 005) than profiles/sessions, so a project that hasn't run that
+  // migration yet would otherwise take down profile/session sync entirely over two
+  // tables that simply don't exist yet. Degrade to "no mobility/walk history yet."
+  const [mobilityRes, walksRes] = await Promise.all([
+    supabase.from("mobility_logs").select("*").eq("user_id", userId).order("date", { ascending: true }),
+    supabase.from("walks").select("*").eq("user_id", userId).order("date", { ascending: true }),
+  ]);
+  if (mobilityRes.error) console.warn("Mobility log fetch failed (migration 005 run yet?):", mobilityRes.error);
+  if (walksRes.error) console.warn("Walk log fetch failed (migration 005 run yet?):", walksRes.error);
+  const mobilityRows = mobilityRes.error ? [] : mobilityRes.data;
+  const walkRows = walksRes.error ? [] : walksRes.data;
 
   return {
     profile: {
@@ -95,6 +139,8 @@ export async function fetchRemoteState(userId: string): Promise<RemoteState | nu
     streak: profileRow.streak || 0,
     lastDate: profileRow.last_date,
     history: ((sessionRows as SessionRow[]) || []).map(rowToHistoryEntry),
+    mobility: ((mobilityRows as MobilityRow[]) || []).map(rowToMobilityEntry),
+    walks: ((walkRows as WalkRow[]) || []).map(rowToWalkEntry),
   };
 }
 
@@ -150,11 +196,34 @@ export async function pushSession(userId: string, entry: HistoryEntry) {
   if (error) throw error;
 }
 
+export async function pushMobility(userId: string, entry: MobilityEntry) {
+  const row = { id: entry.id, user_id: userId, date: entry.date, minutes: entry.minutes, updated_at: new Date().toISOString() };
+  const { error } = await supabase.from("mobility_logs").upsert(row);
+  if (error) throw error;
+}
+
+export async function pushWalk(userId: string, entry: WalkEntry) {
+  const row = {
+    id: entry.id,
+    user_id: userId,
+    date: entry.date,
+    minutes: entry.minutes,
+    kind: entry.kind,
+    feel: entry.feel,
+    hurt: entry.hurt,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabase.from("walks").upsert(row);
+  if (error) throw error;
+}
+
 // Dev-only: wipe this account's logged sessions and reset their block/session
 // position, so the "one session a day" gate doesn't block repeated testing.
 export async function resetTestData(userId: string) {
   const { error: delErr } = await supabase.from("sessions").delete().eq("user_id", userId);
   if (delErr) throw delErr;
+  await supabase.from("mobility_logs").delete().eq("user_id", userId);
+  await supabase.from("walks").delete().eq("user_id", userId);
   const { error: profErr } = await supabase
     .from("profiles")
     .update({ block: 1, session: 0, streak: 0, last_date: null })

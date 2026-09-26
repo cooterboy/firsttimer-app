@@ -59,6 +59,39 @@ create policy "sessions are self-owned" on sessions
 -- One row per person per session (block+idx), matching the app's own uniqueness rule.
 create unique index if not exists sessions_user_block_idx on sessions (user_id, block, idx);
 
+create table if not exists mobility_logs (
+  id uuid primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  date timestamptz not null,
+  minutes int not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+alter table mobility_logs enable row level security;
+
+create policy "mobility_logs are self-owned" on mobility_logs
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create table if not exists walks (
+  id uuid primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  date timestamptz not null,
+  minutes int not null default 0,
+  kind text not null default 'walk',
+  feel text not null default '',
+  hurt text[] not null default '{}',
+  updated_at timestamptz not null default now()
+);
+
+alter table walks enable row level security;
+
+create policy "walks are self-owned" on walks
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
 -- Auto-create a blank profile row the moment someone signs up, so the app never has
 -- to handle "signed in but no profile row yet".
 create or replace function handle_new_user()

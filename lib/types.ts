@@ -24,6 +24,27 @@ export type Settings = {
   weighin: boolean;
   reminders: boolean;
   remindTime: string; // "7:00 am" style, matches the prototype
+  mobility: "weekly" | "biweekly" | "off";
+};
+
+// Ten timed stretches on a non-training day (prototype's state.mobility).
+export type MobilityEntry = {
+  id: string;
+  date: string; // ISO
+  minutes: number;
+};
+
+export type WalkKind = "walk" | "jog" | "run";
+
+// A walk/jog/run, logged on its own — never touches the lifting streak
+// (prototype's state.walks).
+export type WalkEntry = {
+  id: string;
+  date: string; // ISO
+  minutes: number;
+  kind: WalkKind;
+  feel: "" | "easy" | "right" | "hard";
+  hurt: string[];
 };
 
 // One movement's logged result inside a completed session (prototype's h.moves[name]).

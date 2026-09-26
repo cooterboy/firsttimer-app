@@ -15,7 +15,8 @@ import {
   unit,
 } from "./gymProgram";
 import * as Crypto from "expo-crypto";
-import { ActiveMove, ActiveWorkout, HistoryEntry, HistoryMove, Profile, Settings } from "./types";
+import { ActiveMove, ActiveWorkout, HistoryEntry, HistoryMove, MobilityEntry, Profile, Settings, WalkEntry, WalkKind } from "./types";
+import { walkKindLabel } from "./walkProgram";
 
 export const MOVE_TAGS = ["Form felt off", "Joint ache", "Machine confusing", "Grip gave out", "Felt great"];
 export const SESSION_TAGS = [
@@ -674,12 +675,124 @@ export function buildBackfillEntry(
   };
 }
 
+export function trainedToday(history: HistoryEntry[]): boolean {
+  const k = new Date();
+  k.setHours(0, 0, 0, 0);
+  return history.some((h) => {
+    const d = new Date(h.date);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() === k.getTime();
+  });
+}
+
+// ---- mobility day (prototype's mobilityDue/mobilityToday) ----
+// Logged separately from sessions on purpose (see below): the streak, milestones and
+// month-two number all measure lifting, so neither of these ever touches it.
+export function mobilityDue(mobility: MobilityEntry[], frequency: Settings["mobility"]): boolean {
+  if (frequency === "off") return false;
+  const k = weekKey(new Date());
+  if (mobility.some((m) => weekKey(m.date) === k)) return false;
+  if (frequency === "biweekly") {
+    const last = mobility[mobility.length - 1];
+    if (last && k - weekKey(last.date) < 14 * 86400000) return false;
+  }
+  return true;
+}
+export function mobilityToday(mobility: MobilityEntry[]): boolean {
+  const k = new Date();
+  k.setHours(0, 0, 0, 0);
+  return mobility.some((m) => {
+    const d = new Date(m.date);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() === k.getTime();
+  });
+}
+export function newMobilityEntry(minutes: number): MobilityEntry {
+  return { id: Crypto.randomUUID(), date: new Date().toISOString(), minutes };
+}
+// prototype's finishMob(): what gets said depends on whether they also lifted today,
+// whether it's their first ever, and round-number milestones every four blocks.
+export function mobilityFinishCopy(
+  mobility: MobilityEntry[],
+  minutes: number,
+  alsoLifted: boolean
+): { big: string; line: string } {
+  const nt = nextTrainingDay();
+  const count = mobility.length;
+  if (alsoLifted)
+    return {
+      big: "Overachiever.",
+      line: `A session and a mobility day, same day. That's the pair almost nobody does. See you ${nt.name}.`,
+    };
+  if (count === 1)
+    return {
+      big: "Loose. Done.",
+      line: `Your first mobility day. This is the part everyone skips and then wishes they hadn't. ${nt.name} will feel different.`,
+    };
+  if (count % 4 === 0)
+    return {
+      big: `${count} mobility days.`,
+      line: `Four blocks of the thing nobody does. Your hips will keep saying thank you. See you ${nt.name}.`,
+    };
+  return {
+    big: "Loose. Done.",
+    line: `${minutes} minutes on the floor while everyone else scrolled. Next session is ${nt.name} and you'll feel this one then.`,
+  };
+}
+
+// ---- walk / jog / run (prototype's walksOn/finishWalk) ----
+export function walksOn(walks: WalkEntry[], d: Date): WalkEntry[] {
+  const k = new Date(d);
+  k.setHours(0, 0, 0, 0);
+  return walks.filter((w) => {
+    const x = new Date(w.date);
+    x.setHours(0, 0, 0, 0);
+    return x.getTime() === k.getTime();
+  });
+}
+export function walkMinutesToday(walks: WalkEntry[]): number {
+  return walksOn(walks, new Date()).reduce((a, w) => a + (w.minutes || 0), 0);
+}
+export function movedDaysThisWeek(walks: WalkEntry[]): number {
+  const wk = weekKey(new Date());
+  const days = new Set<string>();
+  walks.forEach((w) => {
+    if (weekKey(w.date) === wk) days.add(new Date(w.date).toDateString());
+  });
+  return days.size;
+}
+export function newWalkEntry(kind: WalkKind, minutes: number): WalkEntry {
+  return { id: Crypto.randomUUID(), date: new Date().toISOString(), minutes, kind, feel: "", hurt: [] };
+}
+// prototype's renderWalkDone(): what gets said depends on whether they also lifted
+// today, whether it's their first ever, or they've hit four-plus days moving this week.
+export function walkFinishCopy(
+  walks: WalkEntry[],
+  entry: WalkEntry,
+  lifted: boolean
+): { big: string; line: string } {
+  const count = walks.length;
+  const moved = movedDaysThisWeek(walks);
+  const kind = walkKindLabel(entry.kind).toLowerCase();
+  if (lifted) return { big: "Both, in one day.", line: `A session and a ${kind}. That's more than almost anyone does in a week.` };
+  if (count === 1)
+    return {
+      big: "That counts.",
+      line: "Your first one logged. Moving on the days between sessions is the part that makes the sessions feel easier.",
+    };
+  if (moved >= 4) return { big: `${moved} days moving this week.`, line: "That's a habit, not a streak. Keep it boring and it keeps working." };
+  return { big: "Logged.", line: `${entry.minutes} minutes you didn't have to do. It adds up faster than anything you'll feel day to day.` };
+}
+
 // ---- data export (prototype's historyCsv()) ----
-// One row per movement per session — the shape a spreadsheet actually wants.
-// Mobility/walk/weigh-in rows from the prototype's version are omitted since
-// those features don't exist here yet; the column set matches so a future
-// export stays a superset, not a breaking change.
-export function historyCsv(history: HistoryEntry[], units: Profile["units"]): string {
+// One row per movement per session, plus one row each for mobility days and
+// walks/runs — the shape a spreadsheet actually wants.
+export function historyCsv(
+  history: HistoryEntry[],
+  units: Profile["units"],
+  mobility: MobilityEntry[] = [],
+  walks: WalkEntry[] = []
+): string {
   const q = (v: unknown) => `"${String(v === undefined || v === null ? "" : v).replace(/"/g, '""')}"`;
   const u = unit(units);
   const rows: (string | number)[][] = [
@@ -731,6 +844,31 @@ export function historyCsv(history: HistoryEntry[], units: Profile["units"]): st
         ]);
       });
     });
+  mobility.forEach((x) => {
+    rows.push([x.date, "", "", "", "", x.minutes || "", "", "", "", "Mobility day", "mobility", "", "", "", "", "", "", ""]);
+  });
+  walks.forEach((w) => {
+    rows.push([
+      w.date,
+      "",
+      "",
+      "",
+      "",
+      w.minutes || "",
+      "",
+      "",
+      "",
+      walkKindLabel(w.kind),
+      "cardio",
+      "",
+      "",
+      "",
+      "",
+      w.feel || "",
+      (w.hurt || []).join("; "),
+      "",
+    ]);
+  });
   return rows.map((r) => r.map(q).join(",")).join("\r\n");
 }
 
@@ -743,6 +881,8 @@ export type ExportSnapshot = {
   streak: number;
   lastDate: string | null;
   history: HistoryEntry[];
+  mobility: MobilityEntry[];
+  walks: WalkEntry[];
 };
 
 export function historyJson(snapshot: Omit<ExportSnapshot, "exportedAt">): string {

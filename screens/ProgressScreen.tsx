@@ -9,6 +9,7 @@ import { fonts, spacing, type } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import { BLOCK_SESSIONS, daysPer, unit, weekOf, weeksPerBlock } from "../lib/gymProgram";
 import { fmtDate, historyMovedTotal, movedLabel, setsSummary } from "../lib/sessionEngine";
+import { walkKindLabel } from "../lib/walkProgram";
 import { HistoryEntry } from "../lib/types";
 import AppHeader from "../components/AppHeader";
 import Card from "../components/Card";
@@ -19,9 +20,10 @@ export default function ProgressScreen() {
   const appState = useAppState();
   const navigation = useNavigation<any>();
   const tabBarHeight = useBottomTabBarHeight();
-  const { history, streak, block, session, profile } = appState;
+  const { history, mobility, walks, streak, block, session, profile } = appState;
   const [openKey, setOpenKey] = useState<{ block: number; idx: number } | null>(null);
   const openEntry = openKey ? history.find((h) => h.block === openKey.block && h.idx === openKey.idx) || null : null;
+  const hasAnything = history.length > 0 || mobility.length > 0 || walks.length > 0;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]} edges={["top"]}>
@@ -32,7 +34,7 @@ export default function ProgressScreen() {
       >
         <Text style={[styles.title, { color: colors.ink, fontFamily: fonts.display }]}>Progress</Text>
 
-        {history.length === 0 ? (
+        {!hasAnything ? (
           <EmptyState colors={colors} />
         ) : (
           <>
@@ -43,6 +45,8 @@ export default function ProgressScreen() {
               colors={colors}
               history={history}
               units={profile.units}
+              mobility={mobility}
+              walks={walks}
               onOpen={(h) => setOpenKey({ block: h.block, idx: h.idx })}
               onBackfill={() => navigation.navigate("Backfill")}
             />
@@ -223,20 +227,68 @@ function History({
   colors,
   history,
   units,
+  mobility,
+  walks,
   onOpen,
   onBackfill,
 }: {
   colors: ReturnType<typeof useTheme>["colors"];
   history: ReturnType<typeof useAppState>["history"];
   units: "imperial" | "metric";
+  mobility: ReturnType<typeof useAppState>["mobility"];
+  walks: ReturnType<typeof useAppState>["walks"];
   onOpen: (entry: HistoryEntry) => void;
   onBackfill: () => void;
 }) {
-  const sorted = [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  type Row =
+    | { kind: "session"; date: string; entry: HistoryEntry }
+    | { kind: "mobility"; date: string; entry: (typeof mobility)[number] }
+    | { kind: "walk"; date: string; entry: (typeof walks)[number] };
+  const rows: Row[] = [
+    ...history.map((entry) => ({ kind: "session" as const, date: entry.date, entry })),
+    ...mobility.map((entry) => ({ kind: "mobility" as const, date: entry.date, entry })),
+    ...walks.map((entry) => ({ kind: "walk" as const, date: entry.date, entry })),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
   return (
     <Card style={{ marginTop: spacing.md }}>
       <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display }]}>Every session</Text>
-      {sorted.map((h, i) => {
+      {rows.map((row, i) => {
+        const border = i > 0 && { borderTopWidth: 1, borderTopColor: colors.line };
+        if (row.kind === "mobility") {
+          const m = row.entry;
+          return (
+            <View key={m.id} style={[styles.histRow, border]}>
+              <View style={styles.histTop}>
+                <Text style={[styles.histTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Mobility day</Text>
+                <Text style={[styles.histMeta, { color: colors.muted }]}>
+                  {fmtDate(m.date)} · {m.minutes} min
+                </Text>
+              </View>
+            </View>
+          );
+        }
+        if (row.kind === "walk") {
+          const w = row.entry;
+          const bits = [
+            w.feel ? { easy: "felt easy", right: "about right", hard: "felt hard" }[w.feel] : "",
+            w.hurt.length ? `hurt: ${w.hurt.join(", ")}` : "",
+          ].filter(Boolean);
+          return (
+            <View key={w.id} style={[styles.histRow, border]}>
+              <View style={styles.histTop}>
+                <Text style={[styles.histTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>
+                  {walkKindLabel(w.kind)}
+                </Text>
+                <Text style={[styles.histMeta, { color: colors.muted }]}>
+                  {fmtDate(w.date)} · {w.minutes} min
+                </Text>
+              </View>
+              {bits.length ? <Text style={[styles.histDetail, { color: colors.muted }]}>{bits.join(" · ")}</Text> : null}
+            </View>
+          );
+        }
+        const h = row.entry;
         const notes = Object.keys(h.moves)
           .filter((n) => h.moves[n].note)
           .map((n) => `${n}: ${h.moves[n].note}`);
@@ -247,11 +299,7 @@ function History({
           })
           .join(" · ");
         return (
-          <TouchableOpacity
-            key={h.id}
-            onPress={() => onOpen(h)}
-            style={[styles.histRow, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}
-          >
+          <TouchableOpacity key={h.id} onPress={() => onOpen(h)} style={[styles.histRow, border]}>
             <View style={styles.histTop}>
               <Text style={[styles.histTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>
                 Block {h.block} · Session {h.idx + 1} · {h.letter}

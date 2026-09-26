@@ -131,7 +131,7 @@ export default function AccountScreen() {
   const exportCsv = async () => {
     setExporting(true);
     try {
-      const csv = historyCsv(appState.history, appState.profile.units);
+      const csv = historyCsv(appState.history, appState.profile.units, appState.mobility, appState.walks);
       await saveAndShare("first-timer-sessions.csv", csv, "text/csv");
     } catch (e) {
       Alert.alert("Couldn't export", "Something went wrong saving that file.");
@@ -151,6 +151,8 @@ export default function AccountScreen() {
         streak: appState.streak,
         lastDate: appState.lastDate,
         history: appState.history,
+        mobility: appState.mobility,
+        walks: appState.walks,
       });
       await saveAndShare("first-timer-data.json", json, "application/json");
     } catch (e) {

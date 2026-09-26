@@ -5,7 +5,18 @@ import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, radius, spacing, type } from "../lib/theme";
 import { firstDayGym, unit } from "../lib/gymProgram";
-import { buildSessionForProfile, lastFor, nextTrainingDay } from "../lib/sessionEngine";
+import {
+  buildSessionForProfile,
+  lastFor,
+  mobilityDue,
+  mobilityToday,
+  nextTrainingDay,
+  planDays,
+  walkMinutesToday,
+  walksOn,
+} from "../lib/sessionEngine";
+import { mobilityMinutes, MOBILITY } from "../lib/mobilityProgram";
+import { walkKindLabel } from "../lib/walkProgram";
 import { useAppState } from "../lib/appState";
 import { useWorkoutModal } from "../lib/workoutModal";
 import AppHeader from "../components/AppHeader";
@@ -38,6 +49,9 @@ export default function TodayScreen() {
   const trainedToday = appState.history.some((h) => isSameDay(h.date, new Date()));
   const resume = !!appState.active && appState.active.block === appState.block && appState.active.idx === appState.session;
   const built = buildSessionForProfile(appState.block, appState.session, appState.profile);
+  const isPlanDay = planDays().includes(dow);
+  const mobDayActive =
+    !isPlanDay && !trainedToday && mobilityDue(appState.mobility, appState.settings.mobility) && !resume && done > 0;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
@@ -64,9 +78,11 @@ export default function TodayScreen() {
           </View>
         ) : null}
 
-        <WeekStrip dow={dow} colors={colors} history={appState.history} />
+        <WeekStrip dow={dow} colors={colors} history={appState.history} mobility={appState.mobility} walks={appState.walks} />
 
-        {trainedToday && !resume ? (
+        {mobDayActive ? (
+          <MobilityDayCard colors={colors} nextName={nextTrainingDay().name} />
+        ) : trainedToday && !resume ? (
           <DoneForTodayCard
             colors={colors}
             block={appState.block}
@@ -86,7 +102,7 @@ export default function TodayScreen() {
             { backgroundColor: colors.accent },
             trainedToday && !resume && { backgroundColor: colors.sunken },
           ]}
-          onPress={workoutModal.open}
+          onPress={mobDayActive ? workoutModal.openMobility : workoutModal.open}
         >
           <Text
             style={[
@@ -95,9 +111,52 @@ export default function TodayScreen() {
               trainedToday && !resume && { color: colors.muted },
             ]}
           >
-            {trainedToday && !resume ? `See you ${nextTrainingDay().name}` : resume ? "Continue" : done === 0 ? "Start session 1" : "Start"}
+            {mobDayActive
+              ? "Start mobility"
+              : trainedToday && !resume
+              ? `See you ${nextTrainingDay().name}`
+              : resume
+              ? "Continue"
+              : done === 0
+              ? "Start session 1"
+              : "Start"}
           </Text>
         </TouchableOpacity>
+
+        {mobDayActive ? (
+          <>
+            <WalkCard colors={colors} walks={appState.walks} onPress={workoutModal.openWalk} />
+            <Card style={{ marginTop: spacing.md }}>
+              <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>
+                Session {appState.session + 1} is {nextTrainingDay().name}
+              </Text>
+              <Text style={[styles.moveCue, { color: colors.muted, marginTop: 2 }]}>
+                {built.moves.map((m) => m.n).join(" · ")}
+              </Text>
+            </Card>
+            <Card style={{ marginTop: spacing.md }}>
+              <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Why a rest day</Text>
+              <Text style={[styles.moveCue, { color: colors.muted, marginTop: 2 }]}>
+                Muscle is built between sessions, not during them. Mobility keeps you moving without adding load.
+              </Text>
+            </Card>
+          </>
+        ) : (
+          <>
+            {mobilityToday(appState.mobility) ? (
+              <MobilityDoneBanner colors={colors} minutes={appState.mobility[appState.mobility.length - 1].minutes} />
+            ) : mobilityDue(appState.mobility, appState.settings.mobility) && done > 0 ? (
+              <TouchableOpacity style={[styles.ghostBtn, { borderColor: colors.line }]} onPress={workoutModal.openMobility}>
+                <Text style={{ color: colors.ink, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>
+                  {trainedToday
+                    ? `Loosen up: ${mobilityMinutes()} minutes of mobility`
+                    : `Or do ${mobilityMinutes()} minutes of mobility instead`}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+            <WalkCard colors={colors} walks={appState.walks} onPress={workoutModal.openWalk} />
+          </>
+        )}
 
         {done === 0 ? <BeforeFirstOne colors={colors} /> : null}
         <InfoRows colors={colors} />
@@ -111,20 +170,27 @@ function WeekStrip({
   dow,
   colors,
   history,
+  mobility,
+  walks,
 }: {
   dow: number;
   colors: ReturnType<typeof useTheme>["colors"];
   history: ReturnType<typeof useAppState>["history"];
+  mobility: ReturnType<typeof useAppState>["mobility"];
+  walks: ReturnType<typeof useAppState>["walks"];
 }) {
   const now = new Date();
   const monday = new Date(now);
   monday.setHours(0, 0, 0, 0);
   monday.setDate(now.getDate() - dow);
-  const doneDates = history.map((h) => {
-    const d = new Date(h.date);
+  const dayOf = (iso: string) => {
+    const d = new Date(iso);
     d.setHours(0, 0, 0, 0);
     return d.getTime();
-  });
+  };
+  const doneDates = history.map((h) => dayOf(h.date));
+  const mobDates = mobility.map((m) => dayOf(m.date));
+  const walkDates = walks.map((w) => dayOf(w.date));
 
   return (
     <Card style={styles.weekCard}>
@@ -132,9 +198,12 @@ function WeekStrip({
         {DAY_LETTERS.map((letter, i) => {
           const d = new Date(monday);
           d.setDate(monday.getDate() + i);
+          const t = d.getTime();
           const isToday = i === dow;
-          const isDone = doneDates.includes(d.getTime());
-          const isPlan = !isDone && PLAN_DAYS.includes(i) && i >= dow;
+          const isDone = doneDates.includes(t);
+          const isMob = !isDone && mobDates.includes(t);
+          const isWalk = !isDone && !isMob && walkDates.includes(t);
+          const isPlan = !isDone && !isMob && !isWalk && PLAN_DAYS.includes(i) && i >= dow;
           return (
             <View key={i} style={styles.weekDay}>
               <Text style={[styles.weekLabel, { color: colors.muted, fontFamily: fonts.bodyBold }]}>{letter}</Text>
@@ -143,6 +212,8 @@ function WeekStrip({
                   styles.weekCircle,
                   { borderColor: isPlan ? colors.accent : colors.line, borderStyle: isPlan ? "dashed" : "solid" },
                   isDone && { backgroundColor: colors.good, borderColor: colors.good },
+                  isMob && { backgroundColor: colors.accent, borderColor: colors.accent },
+                  isWalk && { backgroundColor: colors.sunken, borderColor: colors.muted },
                   isToday && { borderColor: colors.accent, borderWidth: 2 },
                 ]}
               >
@@ -151,9 +222,11 @@ function WeekStrip({
                     styles.weekNum,
                     { color: isPlan ? colors.ink : colors.muted, fontFamily: fonts.bodyBold },
                     isDone && { color: "#fff" },
+                    isMob && { color: colors.accentInk },
+                    isWalk && { color: colors.ink },
                   ]}
                 >
-                  {isDone ? "✓" : d.getDate()}
+                  {isDone ? "✓" : isMob ? "M" : isWalk ? "W" : d.getDate()}
                 </Text>
               </View>
             </View>
@@ -287,6 +360,120 @@ function SessionCard({
   );
 }
 
+function MobilityDayCard({
+  colors,
+  nextName,
+}: {
+  colors: ReturnType<typeof useTheme>["colors"];
+  nextName: string;
+}) {
+  const mins = mobilityMinutes();
+  return (
+    <Card style={styles.sessionCard}>
+      <View style={[styles.sessionTop, { backgroundColor: colors.good }]}>
+        <View style={styles.sessionRowTop}>
+          <View style={[styles.badge, { backgroundColor: "rgba(255,255,255,.18)" }]}>
+            <Text style={[styles.badgeText, { color: "#fff", fontFamily: fonts.bodyBold }]}>Rest day</Text>
+          </View>
+          <Text style={[styles.sessionWeek, { color: "#fff", fontFamily: fonts.bodyBold }]}>Next session {nextName}</Text>
+        </View>
+        <Text style={[styles.sessionTitle, { color: "#fff", fontFamily: fonts.display }]}>Mobility day.</Text>
+        <Text style={[styles.sessionSub, { color: "#fff" }]}>
+          {mins} minutes on the floor. Ten stretches, timed, one after another. This is what makes {nextName} feel better.
+        </Text>
+      </View>
+      <View style={styles.moveList}>
+        {MOBILITY.map((m, i) => (
+          <View key={m.n} style={[styles.moveRow, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}>
+            <View style={[styles.thumb, { backgroundColor: colors.sunken }]}>
+              <Text style={{ color: colors.muted }}>▶</Text>
+            </View>
+            <View style={styles.moveText}>
+              <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>{m.n}</Text>
+              <Text style={[styles.moveCue, { color: colors.muted }]}>{m.cue}</Text>
+            </View>
+            <Text style={[styles.moveSpec, { color: colors.ink2, fontFamily: fonts.monoBold }]}>
+              {m.sec}s{m.perSide ? " /side" : ""}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </Card>
+  );
+}
+
+function WalkCard({
+  colors,
+  walks,
+  onPress,
+}: {
+  colors: ReturnType<typeof useTheme>["colors"];
+  walks: ReturnType<typeof useAppState>["walks"];
+  onPress: () => void;
+}) {
+  const today = walksOn(walks, new Date());
+  const mins = walkMinutesToday(walks);
+  if (today.length) {
+    return (
+      <Card style={{ marginTop: spacing.md, padding: 0, overflow: "hidden" }}>
+        <View style={[styles.infoRow, { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
+          <View style={[styles.infoIcon, { backgroundColor: colors.good }]}>
+            <Text style={{ color: "#fff" }}>✓</Text>
+          </View>
+          <View style={styles.moveText}>
+            <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>
+              {mins} minute{mins === 1 ? "" : "s"} today
+            </Text>
+            <Text style={[styles.moveCue, { color: colors.muted }]}>
+              {today.map((w) => walkKindLabel(w.kind)).join(", ")}
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity style={styles.infoRow} onPress={onPress}>
+          <View style={[styles.infoIcon, { backgroundColor: colors.sunken }]}>
+            <Text style={{ color: colors.muted }}>▶</Text>
+          </View>
+          <View style={styles.moveText}>
+            <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Log another</Text>
+            <Text style={[styles.moveCue, { color: colors.muted }]}>Any day, training or not.</Text>
+          </View>
+        </TouchableOpacity>
+      </Card>
+    );
+  }
+  return (
+    <Card style={{ marginTop: spacing.md, padding: 0, overflow: "hidden" }}>
+      <TouchableOpacity style={styles.infoRow} onPress={onPress}>
+        <View style={[styles.infoIcon, { backgroundColor: colors.sunken }]}>
+          <Text style={{ color: colors.muted }}>▶</Text>
+        </View>
+        <View style={styles.moveText}>
+          <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Walk or run</Text>
+          <Text style={[styles.moveCue, { color: colors.muted }]}>
+            Twenty easy minutes. Logged on its own, never touches your session streak.
+          </Text>
+        </View>
+      </TouchableOpacity>
+    </Card>
+  );
+}
+
+function MobilityDoneBanner({ colors, minutes }: { colors: ReturnType<typeof useTheme>["colors"]; minutes: number }) {
+  return (
+    <Card style={{ marginTop: spacing.md, padding: 0, overflow: "hidden" }}>
+      <View style={styles.infoRow}>
+        <View style={[styles.infoIcon, { backgroundColor: colors.good }]}>
+          <Text style={{ color: "#fff" }}>✓</Text>
+        </View>
+        <View style={styles.moveText}>
+          <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Mobility done today</Text>
+          <Text style={[styles.moveCue, { color: colors.muted }]}>{minutes} minutes. Nice.</Text>
+        </View>
+      </View>
+    </Card>
+  );
+}
+
 function BeforeFirstOne({ colors }: { colors: ReturnType<typeof useTheme>["colors"] }) {
   const [open, setOpen] = useState<number | null>(null);
   return (
@@ -388,4 +575,5 @@ const styles = StyleSheet.create({
   accordionBody: { fontSize: type.bodySmall, marginTop: 8, lineHeight: 18 },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 },
   infoIcon: { width: 32, height: 32, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  ghostBtn: { borderWidth: 1, borderRadius: 13, padding: 14, alignItems: "center", marginTop: spacing.md },
 });

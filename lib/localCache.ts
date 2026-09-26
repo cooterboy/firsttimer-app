@@ -6,7 +6,7 @@
 // existing "wait for the network" behavior, so this can never make things worse.
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ActiveWorkout, HistoryEntry, Profile, Settings } from "./types";
+import { ActiveWorkout, HistoryEntry, MobilityEntry, Profile, Settings, WalkEntry } from "./types";
 
 const CACHE_VERSION = 1;
 
@@ -18,6 +18,8 @@ export type CachedState = {
   streak: number;
   lastDate: string | null;
   history: HistoryEntry[];
+  mobility: MobilityEntry[];
+  walks: WalkEntry[];
   // The in-progress workout, if any — cached too, so a force-quit mid-session
   // doesn't throw away sets already logged (never synced to Supabase; that's
   // fine, this is purely "restore this device to how it looked before it died").

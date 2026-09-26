@@ -135,6 +135,21 @@ export default function SettingsScreen() {
             sub="Five-minute timer before the first movement."
             right={<Switch value={appState.settings.warmup} onValueChange={(v) => appState.updateSettings({ warmup: v })} />}
           />
+          <Row
+            title="Mobility day"
+            sub="Ten timed stretches, about 12 minutes, on a non-training day."
+            right={
+              <Seg
+                value={appState.settings.mobility}
+                options={[
+                  { v: "weekly", l: "Weekly" },
+                  { v: "biweekly", l: "Every 2 wks" },
+                  { v: "off", l: "Off" },
+                ]}
+                onChange={(v) => appState.updateSettings({ mobility: v })}
+              />
+            }
+          />
         </View>
 
         <Text style={[styles.eyebrow, { color: colors.muted }]}>CHECK-INS</Text>
