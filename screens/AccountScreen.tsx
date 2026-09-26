@@ -6,10 +6,12 @@ import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing, type } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import { unit } from "../lib/gymProgram";
-import { nutritionCard } from "../lib/sessionEngine";
+import { historyCsv, historyJson, nutritionCard } from "../lib/sessionEngine";
+import { saveAndShare } from "../lib/exportFile";
 import { Goal } from "../lib/types";
 import { supabase } from "../lib/supabase";
 import Card from "../components/Card";
+import Sheet from "../components/workout/Sheet";
 
 const GOAL_LABEL: Record<Goal, string> = {
   lose: "Lose fat",
@@ -120,6 +122,42 @@ export default function AccountScreen() {
       goal,
     });
     Alert.alert("Saved");
+  };
+
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const csv = historyCsv(appState.history, appState.profile.units);
+      await saveAndShare("first-timer-sessions.csv", csv, "text/csv");
+    } catch (e) {
+      Alert.alert("Couldn't export", "Something went wrong saving that file.");
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
+  };
+  const exportJson = async () => {
+    setExporting(true);
+    try {
+      const json = historyJson({
+        profile: appState.profile,
+        settings: appState.settings,
+        block: appState.block,
+        session: appState.session,
+        streak: appState.streak,
+        lastDate: appState.lastDate,
+        history: appState.history,
+      });
+      await saveAndShare("first-timer-data.json", json, "application/json");
+    } catch (e) {
+      Alert.alert("Couldn't export", "Something went wrong saving that file.");
+    } finally {
+      setExporting(false);
+      setExportOpen(false);
+    }
   };
 
   const confirmDelete = async () => {
@@ -251,6 +289,14 @@ export default function AccountScreen() {
         <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.xl }]}>RECOVERY, IN FOUR LINES</Text>
         <NutritionCard />
 
+        <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.xl }]}>YOUR DATA</Text>
+        <TouchableOpacity style={[styles.row, { borderColor: colors.line }]} onPress={() => setExportOpen(true)}>
+          <Text style={{ color: colors.ink, fontSize: 14, fontFamily: fonts.bodySemiBold }}>Download everything</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>
+            Every session and note, as a spreadsheet and a data file. Yours to keep.
+          </Text>
+        </TouchableOpacity>
+
         <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.xl }]}>SIGN-IN</Text>
         <TouchableOpacity
           style={[styles.row, { borderColor: colors.line }]}
@@ -290,6 +336,32 @@ export default function AccountScreen() {
           )}
         </View>
       </ScrollView>
+
+      <Sheet visible={exportOpen} onClose={() => setExportOpen(false)}>
+        <Text style={{ color: colors.ink, fontFamily: fonts.display, fontSize: 24, letterSpacing: 0.5, marginBottom: 8 }}>
+          Download your data
+        </Text>
+        <Text style={{ color: colors.ink2, fontSize: 14, lineHeight: 20, marginBottom: 14 }}>
+          Two files. The spreadsheet opens in Excel, Numbers or Sheets. The data file is everything the app holds,
+          exactly as it holds it.
+        </Text>
+        <TouchableOpacity
+          disabled={exporting}
+          style={[styles.exportOpt, { borderColor: colors.accent, backgroundColor: colors.accent, opacity: exporting ? 0.6 : 1 }]}
+          onPress={exportCsv}
+        >
+          <Text style={{ color: colors.accentInk, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>
+            Sessions as a spreadsheet (.csv)
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          disabled={exporting}
+          style={[styles.exportOpt, { borderColor: colors.line, opacity: exporting ? 0.6 : 1 }]}
+          onPress={exportJson}
+        >
+          <Text style={{ color: colors.ink, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>Everything (.json)</Text>
+        </TouchableOpacity>
+      </Sheet>
     </SafeAreaView>
   );
 }
@@ -310,4 +382,5 @@ const styles = StyleSheet.create({
   row: { borderWidth: 1, borderRadius: 13, padding: 14 },
   dangerCard: { borderWidth: 1, borderRadius: 13, padding: 14 },
   ghostDanger: { borderWidth: 1, borderRadius: 13, padding: 13, alignItems: "center" },
+  exportOpt: { borderWidth: 1, borderRadius: 13, padding: 14, alignItems: "center", marginBottom: 10 },
 });

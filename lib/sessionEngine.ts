@@ -673,3 +673,79 @@ export function buildBackfillEntry(
     backfilled: true,
   };
 }
+
+// ---- data export (prototype's historyCsv()) ----
+// One row per movement per session — the shape a spreadsheet actually wants.
+// Mobility/walk/weigh-in rows from the prototype's version are omitted since
+// those features don't exist here yet; the column set matches so a future
+// export stays a superset, not a breaking change.
+export function historyCsv(history: HistoryEntry[], units: Profile["units"]): string {
+  const q = (v: unknown) => `"${String(v === undefined || v === null ? "" : v).replace(/"/g, '""')}"`;
+  const u = unit(units);
+  const rows: (string | number)[][] = [
+    [
+      "date",
+      "block",
+      "session",
+      "week",
+      "letter",
+      "minutes",
+      "rating",
+      "session_tags",
+      "session_note",
+      "movement",
+      "type",
+      "sets",
+      "reps",
+      `weight_${u}`,
+      "sets_detail",
+      "feel",
+      "movement_tags",
+      "movement_note",
+    ],
+  ];
+  [...history]
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .forEach((h) => {
+      Object.keys(h.moves).forEach((n) => {
+        const m = h.moves[n];
+        rows.push([
+          h.date,
+          h.block,
+          h.idx + 1,
+          h.week,
+          h.letter,
+          h.minutes || "",
+          h.rating || "",
+          (h.tags || []).join("; "),
+          h.note || "",
+          n,
+          m.type || "",
+          m.sets || "",
+          m.reps || "",
+          m.w || "",
+          (m.setW || []).join(" / "),
+          m.feel || "",
+          (m.mtags || []).join("; "),
+          m.note || "",
+        ]);
+      });
+    });
+  return rows.map((r) => r.map(q).join(",")).join("\r\n");
+}
+
+export type ExportSnapshot = {
+  exportedAt: string;
+  profile: Profile;
+  settings: Settings;
+  block: number;
+  session: number;
+  streak: number;
+  lastDate: string | null;
+  history: HistoryEntry[];
+};
+
+export function historyJson(snapshot: Omit<ExportSnapshot, "exportedAt">): string {
+  const full: ExportSnapshot = { exportedAt: new Date().toISOString(), ...snapshot };
+  return JSON.stringify(full, null, 2);
+}
