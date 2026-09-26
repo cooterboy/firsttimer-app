@@ -17,6 +17,7 @@ create table if not exists profiles (
   height_cm numeric,
   weight numeric,
   goal text,
+  settings jsonb not null default '{}'::jsonb,
   block int not null default 1,
   session int not null default 0,
   streak int not null default 0,

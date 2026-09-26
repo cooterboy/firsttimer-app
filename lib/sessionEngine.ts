@@ -548,3 +548,89 @@ export function setsSummary(m: HistoryMove, units: Profile["units"]): string {
   if (m.setW && m.setW.length > 1 && m.setW.some((v) => v !== m.setW[0])) return `${m.setW.join("/")} ${u}`;
   return `${m.w || "—"} ${u}`;
 }
+
+// prototype's convertUnits(): every stored weight gets converted in place when the
+// person flips lb/kg, so old numbers keep meaning what they meant. lb<->kg only —
+// no other field changes.
+function convNum(to: "imperial" | "metric") {
+  const f = to === "metric" ? (v: number) => Math.round((v / 2.2046) * 2) / 2 : (v: number) => Math.round(v * 2.2046);
+  return (v: string | null | undefined): string | null => {
+    const n = Number(v);
+    if (v === "" || v === null || v === undefined || !isFinite(n) || n <= 0) return (v as string) ?? null;
+    return String(f(n));
+  };
+}
+export function convertHistoryUnits(history: HistoryEntry[], to: "imperial" | "metric"): HistoryEntry[] {
+  const conv = convNum(to);
+  return history.map((h) => {
+    const moves: HistoryEntry["moves"] = {};
+    Object.keys(h.moves).forEach((k) => {
+      const m = h.moves[k];
+      if (m.type !== "weight") {
+        moves[k] = m;
+        return;
+      }
+      moves[k] = { ...m, w: conv(m.w) || "", setW: (m.setW || []).map((v) => conv(v) || v) };
+    });
+    return { ...h, moves };
+  });
+}
+export function convertProfileWeight(weight: number | null, to: "imperial" | "metric"): number | null {
+  if (weight === null) return null;
+  const conv = convNum(to);
+  const out = conv(String(weight));
+  return out === null ? null : Number(out);
+}
+
+// ---- nutrition card (prototype's "Recovery, in four lines") ----
+// No activity-level onboarding field yet, so this always uses the prototype's
+// fallback multiplier (1.45) rather than a per-person sedentary/active setting.
+const GOAL_CAL_ADJUST: Record<string, number> = { lose: -400, build: 250, energy: 0, habit: 0, confidence: 0, event: 150 };
+const GOAL_CAL_SUB: Record<string, string> = {
+  lose: "About 400 under maintenance. Slow is what sticks.",
+  build: "About 250 over maintenance. Most of it protein.",
+  energy: "Around maintenance. Eat to train.",
+  habit: "Around maintenance. Don't change two things at once.",
+  confidence: "Around maintenance. Eat to train.",
+  event: "A little over maintenance on long days.",
+};
+
+export function weightKg(weight: number | null, units: Profile["units"]): number {
+  const w = weight || 0;
+  return units === "metric" ? w : w / 2.2046;
+}
+
+export function calorieRange(profile: Profile): [number, number] | null {
+  const kg = weightKg(profile.weight, profile.units);
+  const cm = profile.heightCm || 0;
+  const age = profile.age || 0;
+  if (!kg || !cm || !age) return null;
+  const base = 10 * kg + 6.25 * cm - 5 * age;
+  const act = 1.45;
+  const adj = (profile.goal && GOAL_CAL_ADJUST[profile.goal]) || 0;
+  const lo = (base - 161) * act + adj;
+  const hi = (base + 5) * act + adj;
+  const r = (v: number) => Math.round(v / 50) * 50;
+  return [r(lo), r(hi)];
+}
+
+export type NutritionCard = {
+  protein: string;
+  water: string;
+  calorieLine: string;
+  calorieSub: string;
+  hasData: boolean;
+};
+
+export function nutritionCard(profile: Profile): NutritionCard {
+  const u = unit(profile.units);
+  const kg = weightKg(profile.weight, profile.units);
+  const pLo = profile.goal === "lose" ? 1.8 : 1.6;
+  const pHi = 2.2;
+  const protein = kg ? `${Math.round(kg * pLo)}–${Math.round(kg * pHi)} g` : "1.6–2.2 g per kg";
+  const water = kg ? `${((Math.round((kg * 35) / 250) * 250) / 1000).toFixed(2).replace(/\.?0+$/, "")} L` : "35 ml per kg";
+  const cal = calorieRange(profile);
+  const calorieLine = cal ? `${cal[0].toLocaleString()}–${cal[1].toLocaleString()}` : "Add height & age";
+  const calorieSub = cal ? GOAL_CAL_SUB[profile.goal || ""] || "Around maintenance." : "Fill in your details above, and this fills in.";
+  return { protein, water, calorieLine, calorieSub, hasData: !!kg };
+}

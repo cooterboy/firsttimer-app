@@ -22,6 +22,8 @@ export type Settings = {
   warmup: boolean;
   cues: boolean;
   weighin: boolean;
+  reminders: boolean;
+  remindTime: string; // "7:00 am" style, matches the prototype
 };
 
 // One movement's logged result inside a completed session (prototype's h.moves[name]).

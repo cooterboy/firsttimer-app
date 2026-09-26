@@ -6,6 +6,8 @@ import TodayScreen from "../screens/TodayScreen";
 import ProgressScreen from "../screens/ProgressScreen";
 import YouScreen from "../screens/YouScreen";
 import AccountScreen from "../screens/AccountScreen";
+import SettingsScreen from "../screens/SettingsScreen";
+import TrainingPreferencesScreen from "../screens/TrainingPreferencesScreen";
 
 const Tab = createBottomTabNavigator();
 const TodayStack = createNativeStackNavigator();
@@ -33,6 +35,8 @@ function YouStackScreen() {
     <YouStack.Navigator screenOptions={{ headerShown: false }}>
       <YouStack.Screen name="YouRoot" component={YouScreen} />
       <YouStack.Screen name="Account" component={AccountScreen} options={{ presentation: "card" }} />
+      <YouStack.Screen name="Settings" component={SettingsScreen} options={{ presentation: "card" }} />
+      <YouStack.Screen name="TrainingPreferences" component={TrainingPreferencesScreen} options={{ presentation: "card" }} />
     </YouStack.Navigator>
   );
 }

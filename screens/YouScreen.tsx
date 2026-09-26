@@ -51,8 +51,28 @@ export default function YouScreen() {
           </Card>
         </View>
 
-        <Text style={[styles.eyebrow, { color: colors.muted }]}>APP</Text>
+        <Text style={[styles.eyebrow, { color: colors.muted }]}>TRAINING</Text>
         <Card style={{ padding: 0, overflow: "hidden" }}>
+          <TouchableOpacity style={styles.item} onPress={() => navigation.navigate("TrainingPreferences")}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>
+                Training preferences
+              </Text>
+              <Text style={[styles.itemSub, { color: colors.muted }]}>Gym · Mon, Wed, Fri · {profile.length} min</Text>
+            </View>
+            <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
+          </TouchableOpacity>
+        </Card>
+
+        <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.lg }]}>APP</Text>
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          <TouchableOpacity style={[styles.item, { borderBottomWidth: 1, borderBottomColor: colors.line }]} onPress={() => navigation.navigate("Settings")}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Settings</Text>
+              <Text style={[styles.itemSub, { color: colors.muted }]}>{profile.units === "metric" ? "kg" : "lb"} units</Text>
+            </View>
+            <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.item} onPress={() => navigation.navigate("Account")}>
             <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Account</Text>
             <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
@@ -111,6 +131,7 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 11, textTransform: "uppercase", letterSpacing: 1, fontWeight: "700", marginBottom: 8 },
   item: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: "transparent" },
   itemTitle: { fontSize: 14 },
+  itemSub: { fontSize: 12, marginTop: 2 },
   itemChev: { fontSize: 18 },
   btn: { borderWidth: 1, borderRadius: 13, padding: 14, alignItems: "center" },
 });

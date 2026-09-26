@@ -6,8 +6,10 @@ import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing, type } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import { unit } from "../lib/gymProgram";
+import { nutritionCard } from "../lib/sessionEngine";
 import { Goal } from "../lib/types";
 import { supabase } from "../lib/supabase";
+import Card from "../components/Card";
 
 const GOAL_LABEL: Record<Goal, string> = {
   lose: "Lose fat",
@@ -27,6 +29,39 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       </Text>
       {children}
     </View>
+  );
+}
+
+function NutritionRow({ k, sub, v }: { k: string; sub: string; v: React.ReactNode }) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.nutRow}>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: colors.ink, fontSize: 14, fontFamily: fonts.bodyMedium }}>{k}</Text>
+        <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2, lineHeight: 16 }}>{sub}</Text>
+      </View>
+      <Text style={{ color: colors.ink, fontFamily: fonts.monoBold, fontSize: 14 }}>{v}</Text>
+    </View>
+  );
+}
+
+function NutritionCard() {
+  const { colors } = useTheme();
+  const appState = useAppState();
+  const n = nutritionCard(appState.profile);
+  return (
+    <Card>
+      <NutritionRow k="Protein" sub="Every day, spread over meals. Not just training days." v={n.protein} />
+      <NutritionRow k="Water" sub="More on training days. Pale yellow is the check." v={n.water} />
+      <NutritionRow k="Calories" sub={n.calorieSub} v={n.calorieLine} />
+      <NutritionRow k="Sleep" sub="The workout is the stimulus. Sleep is where the change happens." v="7–9 h" />
+      <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4 }}>
+        {n.hasData
+          ? "Worked out from your weight, height and age above. Update them and these move with it."
+          : "Fill in your weight, height and age above and these fill in for you."}{" "}
+        A certified trainer signs off on the ranges.
+      </Text>
+    </Card>
   );
 }
 
@@ -193,6 +228,9 @@ export default function AccountScreen() {
           <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 15 }}>Save</Text>
         </TouchableOpacity>
 
+        <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.xl }]}>RECOVERY, IN FOUR LINES</Text>
+        <NutritionCard />
+
         <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.xl }]}>SIGN-IN</Text>
         <TouchableOpacity
           style={[styles.row, { borderColor: colors.line }]}
@@ -241,6 +279,7 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.sm },
   backBtn: { width: 30, height: 30, alignItems: "center", justifyContent: "center" },
   topTitle: { fontSize: 15 },
+  nutRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 10 },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   input: { padding: 13, fontSize: 16, borderRadius: 11 },
   note: { fontSize: 12, lineHeight: 17, marginTop: -6, marginBottom: 16 },

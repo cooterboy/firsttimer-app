@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "./supabase";
-import { fetchRemoteState, pushProfile, pushSession, resetTestData as resetTestDataRemote } from "./sync";
-import { devSeedNearBlockEnd } from "./sessionEngine";
+import { fetchRemoteState, pushProfile, pushSession, pushSettings, resetTestData as resetTestDataRemote } from "./sync";
+import { convertHistoryUnits, convertProfileWeight, devSeedNearBlockEnd } from "./sessionEngine";
 import { ActiveWorkout, HistoryEntry, Profile, Settings } from "./types";
 
 // In-memory app state, mirroring the shape of the prototype's `state` object
@@ -30,6 +30,8 @@ const defaultSettings: Settings = {
   warmup: true,
   cues: true,
   weighin: true,
+  reminders: true,
+  remindTime: "7:00 am",
 };
 
 type AppState = {
@@ -58,13 +60,15 @@ type AppStateContextValue = AppState & {
   resetTestData: () => Promise<void>;
   devSeedNearBlockEnd: () => void;
   updateProfile: (patch: Partial<Profile>) => void;
+  setUnits: (to: Profile["units"]) => Promise<void>;
+  updateSettings: (patch: Partial<Settings>) => void;
 };
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
 
 export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile>(defaultProfile);
-  const [settings] = useState<Settings>(defaultSettings);
+  const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [block, setBlock] = useState(1);
   const [session, setSession] = useState(0);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -86,6 +90,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
   const resetLocal = () => {
     setProfile(defaultProfile);
+    setSettings(defaultSettings);
     setBlock(1);
     setSession(0);
     setHistory([]);
@@ -112,6 +117,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
           }).catch((e) => console.warn("Profile save failed, staying local:", e));
         }
         setProfile(profileToUse);
+        setSettings({ ...defaultSettings, ...(remote.settings || {}) });
         setBlock(remote.block);
         setSession(remote.session);
         setStreak(remote.streak);
@@ -201,6 +207,38 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const updateSettings = (patch: Partial<Settings>) => {
+    setSettings((s) => {
+      const next = { ...s, ...patch };
+      if (userId) pushSettings(userId, next).catch((e) => console.warn("Settings save failed, staying local:", e));
+      return next;
+    });
+  };
+
+  // prototype's convertUnits(): switching lb/kg converts every stored weight in place,
+  // so a number typed under one unit doesn't silently mean something else under the other.
+  const setUnits = async (to: Profile["units"]) => {
+    if (to === profile.units) return;
+    const convertedHistory = convertHistoryUnits(history, to);
+    const convertedWeight = convertProfileWeight(profile.weight, to);
+    const nextProfile = { ...profile, units: to, weight: convertedWeight };
+    setHistory(convertedHistory);
+    setProfile(nextProfile);
+    if (userId) {
+      try {
+        await Promise.all(convertedHistory.map((e) => pushSession(userId, e)));
+        await pushProfile(userId, nextProfile, {
+          block: latest.current.block,
+          session: latest.current.session,
+          streak: latest.current.streak,
+          lastDate: latest.current.lastDate,
+        });
+      } catch (e) {
+        console.warn("Unit conversion save failed, staying local:", e);
+      }
+    }
+  };
+
   const updateHistoryEntry = (blockN: number, idx: number, patch: Partial<HistoryEntry>) => {
     setHistory((h) =>
       h.map((e) => {
@@ -287,6 +325,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       resetTestData,
       devSeedNearBlockEnd: devSeedNearBlockEndFn,
       updateProfile,
+      setUnits,
+      updateSettings,
     }),
     [profile, settings, block, session, history, streak, lastDate, active, userId, userEmail, authLoading]
   );

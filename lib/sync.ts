@@ -4,7 +4,7 @@
 // commitSession/updateHistoryEntry runs.
 
 import { supabase } from "./supabase";
-import { HistoryEntry, Profile } from "./types";
+import { HistoryEntry, Profile, Settings } from "./types";
 
 type ProfileRow = {
   id: string;
@@ -18,6 +18,7 @@ type ProfileRow = {
   height_cm: number | null;
   weight: number | null;
   goal: string | null;
+  settings: Partial<Settings> | null;
   block: number;
   session: number;
   streak: number;
@@ -40,6 +41,7 @@ type SessionRow = {
 
 export type RemoteState = {
   profile: Profile;
+  settings: Partial<Settings> | null;
   block: number;
   session: number;
   streak: number;
@@ -85,6 +87,7 @@ export async function fetchRemoteState(userId: string): Promise<RemoteState | nu
       weight: profileRow.weight,
       goal: (profileRow.goal as Profile["goal"]) || null,
     },
+    settings: profileRow.settings || null,
     block: profileRow.block || 1,
     session: profileRow.session || 0,
     streak: profileRow.streak || 0,
@@ -116,6 +119,11 @@ export async function pushProfile(
     last_date: meta.lastDate,
   };
   const { error } = await supabase.from("profiles").upsert(row);
+  if (error) throw error;
+}
+
+export async function pushSettings(userId: string, settings: Settings) {
+  const { error } = await supabase.from("profiles").update({ settings }).eq("id", userId);
   if (error) throw error;
 }
 
