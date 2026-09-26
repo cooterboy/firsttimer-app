@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import * as Haptics from "expo-haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing, type } from "../lib/theme";
 import { useAppState } from "../lib/appState";
@@ -122,6 +123,7 @@ export default function AccountScreen() {
       heightCm: nextHeightCm,
       goal,
     });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     Alert.alert("Saved");
   };
 
@@ -164,6 +166,7 @@ export default function AccountScreen() {
   };
 
   const confirmDelete = async () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
     setDeleting(true);
     try {
       const { error } = await supabase.functions.invoke("delete-account");
@@ -182,7 +185,7 @@ export default function AccountScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={{ color: colors.ink, fontSize: 20 }}>‹</Text>
         </TouchableOpacity>
         <Text style={[styles.topTitle, { color: colors.ink, fontFamily: fonts.bodyBold }]}>Account</Text>
@@ -274,8 +277,12 @@ export default function AccountScreen() {
             const on = goal === g;
             return (
               <TouchableOpacity
+                activeOpacity={0.7}
                 key={g}
-                onPress={() => setGoal(on ? null : g)}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setGoal(on ? null : g);
+                }}
                 style={[styles.pill, { borderColor: on ? colors.ink : colors.line, backgroundColor: on ? colors.ink : colors.raised }]}
               >
                 <Text style={{ color: on ? colors.paper : colors.ink, fontSize: 13, fontFamily: fonts.bodySemiBold }}>
@@ -286,7 +293,7 @@ export default function AccountScreen() {
           })}
         </View>
 
-        <TouchableOpacity style={[styles.primary, { backgroundColor: colors.ink, marginTop: spacing.lg }]} onPress={save}>
+        <TouchableOpacity activeOpacity={0.7} style={[styles.primary, { backgroundColor: colors.ink, marginTop: spacing.lg }]} onPress={save}>
           <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 15 }}>Save</Text>
         </TouchableOpacity>
 
@@ -294,7 +301,7 @@ export default function AccountScreen() {
         <NutritionCard />
 
         <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.xl }]}>YOUR DATA</Text>
-        <TouchableOpacity style={[styles.row, { borderColor: colors.line }]} onPress={() => setExportOpen(true)}>
+        <TouchableOpacity activeOpacity={0.7} style={[styles.row, { borderColor: colors.line }]} onPress={() => setExportOpen(true)}>
           <Text style={{ color: colors.ink, fontSize: 14, fontFamily: fonts.bodySemiBold }}>Download everything</Text>
           <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>
             Every session and note, as a spreadsheet and a data file. Yours to keep.
@@ -302,7 +309,7 @@ export default function AccountScreen() {
         </TouchableOpacity>
 
         <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.xl }]}>SIGN-IN</Text>
-        <TouchableOpacity
+        <TouchableOpacity activeOpacity={0.7}
           style={[styles.row, { borderColor: colors.line }]}
           onPress={async () => {
             await appState.signOut();
@@ -318,13 +325,20 @@ export default function AccountScreen() {
             Deleting removes your profile and every logged session. There's no undo.
           </Text>
           {!confirmingDelete ? (
-            <TouchableOpacity style={[styles.ghostDanger, { borderColor: colors.bad }]} onPress={() => setConfirmingDelete(true)}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={[styles.ghostDanger, { borderColor: colors.bad }]}
+              onPress={() => {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+                setConfirmingDelete(true);
+              }}
+            >
               <Text style={{ color: colors.bad, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>Delete my account and data</Text>
             </TouchableOpacity>
           ) : (
             <>
               <Text style={{ color: colors.bad, fontSize: 12, marginBottom: 10 }}>This wipes everything. There's no undo.</Text>
-              <TouchableOpacity
+              <TouchableOpacity activeOpacity={0.7}
                 disabled={deleting}
                 style={[styles.ghostDanger, { borderColor: colors.bad, opacity: deleting ? 0.6 : 1 }]}
                 onPress={confirmDelete}
@@ -333,7 +347,7 @@ export default function AccountScreen() {
                   {deleting ? "Deleting…" : "Yes, delete it all"}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.ghostDanger, { borderColor: colors.line, marginTop: 8 }]} onPress={() => setConfirmingDelete(false)}>
+              <TouchableOpacity activeOpacity={0.7} style={[styles.ghostDanger, { borderColor: colors.line, marginTop: 8 }]} onPress={() => setConfirmingDelete(false)}>
                 <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>Keep my account</Text>
               </TouchableOpacity>
             </>
@@ -349,7 +363,7 @@ export default function AccountScreen() {
           Two files. The spreadsheet opens in Excel, Numbers or Sheets. The data file is everything the app holds,
           exactly as it holds it.
         </Text>
-        <TouchableOpacity
+        <TouchableOpacity activeOpacity={0.7}
           disabled={exporting}
           style={[styles.exportOpt, { borderColor: colors.accent, backgroundColor: colors.accent, opacity: exporting ? 0.6 : 1 }]}
           onPress={exportCsv}
@@ -358,7 +372,7 @@ export default function AccountScreen() {
             Sessions as a spreadsheet (.csv)
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity
+        <TouchableOpacity activeOpacity={0.7}
           disabled={exporting}
           style={[styles.exportOpt, { borderColor: colors.line, opacity: exporting ? 0.6 : 1 }]}
           onPress={exportJson}

@@ -3,6 +3,7 @@ import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import * as Haptics from "expo-haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
@@ -62,6 +63,7 @@ export default function BackfillScreen() {
     const entry = buildBackfillEntry(block, session, profile, date, weights);
     appState.commitBackfill(entry);
     setSubmitting(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     Alert.alert("Added", "It counts the same.", [{ text: "OK", onPress: () => navigation.goBack() }]);
   };
 
@@ -86,8 +88,12 @@ export default function BackfillScreen() {
             const on = sameDay(date, o.d);
             return (
               <TouchableOpacity
+                activeOpacity={0.7}
                 key={o.label}
-                onPress={() => setDate(o.d)}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setDate(o.d);
+                }}
                 style={[styles.pill, { borderColor: on ? colors.ink : colors.line, backgroundColor: on ? colors.ink : colors.raised }]}
               >
                 <Text style={{ color: on ? colors.paper : colors.ink, fontSize: 13, fontFamily: fonts.bodySemiBold }}>
@@ -97,7 +103,7 @@ export default function BackfillScreen() {
             );
           })}
         </View>
-        <TouchableOpacity style={[styles.dateBtn, { borderColor: colors.line }]} onPress={() => setShowPicker(true)}>
+        <TouchableOpacity activeOpacity={0.7} style={[styles.dateBtn, { borderColor: colors.line }]} onPress={() => setShowPicker(true)}>
           <Text style={{ color: colors.ink, fontSize: 14 }}>
             {date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
           </Text>
@@ -149,7 +155,7 @@ export default function BackfillScreen() {
           </View>
         ))}
 
-        <TouchableOpacity
+        <TouchableOpacity activeOpacity={0.7}
           disabled={submitting}
           style={[styles.primary, { backgroundColor: colors.accent, opacity: submitting ? 0.6 : 1 }]}
           onPress={submit}
@@ -167,7 +173,7 @@ export default function BackfillScreen() {
 function TopBar({ colors, onBack }: { colors: ReturnType<typeof useTheme>["colors"]; onBack: () => void }) {
   return (
     <View style={styles.topBar}>
-      <TouchableOpacity onPress={onBack} style={styles.backBtn}>
+      <TouchableOpacity activeOpacity={0.7} onPress={onBack} style={styles.backBtn}>
         <Text style={{ color: colors.ink, fontSize: 20 }}>‹</Text>
       </TouchableOpacity>
       <Text style={[styles.topTitle, { color: colors.ink, fontFamily: fonts.bodyBold }]}>Add a session</Text>

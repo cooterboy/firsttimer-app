@@ -9,6 +9,7 @@ import { WALK_HURT, WALK_KINDS, WALK_MINS, walkCue, walkKindLabel } from "../lib
 import { movedDaysThisWeek, newWalkEntry, trainedToday, walksOn, walkFinishCopy } from "../lib/sessionEngine";
 import { WalkKind } from "../lib/types";
 import CelebrateRing from "../components/workout/CelebrateRing";
+import FadeSwitch from "../components/workout/FadeSwitch";
 
 type Phase = "setup" | "timer" | "finish";
 type Result = { big: string; line: string; minutes: number; moved: number; totalMin: number };
@@ -157,7 +158,7 @@ export default function WalkScreen({ visible, onClose }: { visible: boolean; onC
                 {(["easy", "right", "hard"] as const).map((f) => {
                   const on = feel === f;
                   return (
-                    <TouchableOpacity
+                    <TouchableOpacity activeOpacity={0.7}
                       key={f}
                       onPress={() => setFeelTap(f)}
                       style={[
@@ -175,7 +176,7 @@ export default function WalkScreen({ visible, onClose }: { visible: boolean; onC
 
               <Text style={[styles.fieldLabel, { color: colors.muted, marginTop: 18 }]}>ANYTHING HURT?</Text>
               <View style={styles.pillWrap}>
-                <TouchableOpacity
+                <TouchableOpacity activeOpacity={0.7}
                   onPress={() => toggleHurtTap(null)}
                   style={[styles.pill, { borderColor: hurt.length === 0 ? colors.ink : colors.line, backgroundColor: hurt.length === 0 ? colors.ink : colors.sunken }]}
                 >
@@ -184,7 +185,7 @@ export default function WalkScreen({ visible, onClose }: { visible: boolean; onC
                 {WALK_HURT.map((h) => {
                   const on = hurt.includes(h);
                   return (
-                    <TouchableOpacity
+                    <TouchableOpacity activeOpacity={0.7}
                       key={h}
                       onPress={() => toggleHurtTap(h)}
                       style={[styles.pill, { borderColor: on ? colors.ink : colors.line, backgroundColor: on ? colors.ink : colors.sunken }]}
@@ -199,10 +200,10 @@ export default function WalkScreen({ visible, onClose }: { visible: boolean; onC
               </Text>
             </View>
 
-            <TouchableOpacity style={[styles.primary, { backgroundColor: colors.ink }]} onPress={onClose}>
+            <TouchableOpacity activeOpacity={0.7} style={[styles.primary, { backgroundColor: colors.ink }]} onPress={onClose}>
               <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 15 }}>Done</Text>
             </TouchableOpacity>
-            <TouchableOpacity
+            <TouchableOpacity activeOpacity={0.7}
               style={[styles.ghost]}
               onPress={() =>
                 Share.share({
@@ -230,39 +231,41 @@ export default function WalkScreen({ visible, onClose }: { visible: boolean; onC
             <Text style={[styles.topLabel, { color: colors.muted, fontFamily: fonts.bodyBold }]} numberOfLines={1}>
               {walkKindLabel(kind)} · {minutes} min
             </Text>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity activeOpacity={0.7} onPress={onClose}>
               <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 12 }}>Exit</Text>
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={styles.body}>
-            <View style={[styles.video, { backgroundColor: colors.ink }]}>
-              <Text style={[styles.videoTitle, { color: colors.paper, fontFamily: fonts.display }]}>{walkKindLabel(kind)}</Text>
-              <Text style={[styles.videoSub, { color: colors.paper }]}>keep it easy</Text>
-            </View>
+            <FadeSwitch id={phase}>
+              <View style={[styles.video, { backgroundColor: colors.ink }]}>
+                <Text style={[styles.videoTitle, { color: colors.paper, fontFamily: fonts.display }]}>{walkKindLabel(kind)}</Text>
+                <Text style={[styles.videoSub, { color: colors.paper }]}>keep it easy</Text>
+              </View>
 
-            <View style={[styles.timerRow, { backgroundColor: colors.ink }]}>
-              <View>
-                <Text style={[styles.timerTime, { color: colors.paper, fontFamily: fonts.display }]}>
-                  {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}
-                </Text>
-                <Text style={[styles.timerLabel, { color: colors.paper }]}>{walkKindLabel(kind)}</Text>
+              <View style={[styles.timerRow, { backgroundColor: colors.ink }]}>
+                <View>
+                  <Text style={[styles.timerTime, { color: colors.paper, fontFamily: fonts.display }]}>
+                    {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}
+                  </Text>
+                  <Text style={[styles.timerLabel, { color: colors.paper }]}>{walkKindLabel(kind)}</Text>
+                </View>
+                <View style={[styles.bar, { backgroundColor: "rgba(140,140,140,.35)" }]}>
+                  <View style={[styles.barFill, { backgroundColor: colors.accent, width: `${Math.round(pct * 100)}%` }]} />
+                </View>
+                <TouchableOpacity activeOpacity={0.7} onPress={togglePause}>
+                  <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 13 }}>{running ? "Pause" : "Resume"}</Text>
+                </TouchableOpacity>
               </View>
-              <View style={[styles.bar, { backgroundColor: "rgba(140,140,140,.35)" }]}>
-                <View style={[styles.barFill, { backgroundColor: colors.accent, width: `${Math.round(pct * 100)}%` }]} />
-              </View>
-              <TouchableOpacity onPress={togglePause}>
-                <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 13 }}>{running ? "Pause" : "Resume"}</Text>
+
+              <Text style={[styles.cue, { color: colors.ink2, textAlign: "center" }]}>{cue}</Text>
+
+              <TouchableOpacity activeOpacity={0.7} style={[styles.primary, { backgroundColor: colors.accent }]} onPress={finishNow}>
+                <Text style={{ color: colors.accentInk, fontFamily: fonts.bodyBold, fontSize: 15 }}>Finish</Text>
               </TouchableOpacity>
-            </View>
-
-            <Text style={[styles.cue, { color: colors.ink2, textAlign: "center" }]}>{cue}</Text>
-
-            <TouchableOpacity style={[styles.primary, { backgroundColor: colors.accent }]} onPress={finishNow}>
-              <Text style={{ color: colors.accentInk, fontFamily: fonts.bodyBold, fontSize: 15 }}>Finish</Text>
-            </TouchableOpacity>
-            <Text style={[styles.note, { color: colors.muted, textAlign: "center" }]}>
-              Put your phone away — it keeps counting, and it'll buzz at the turnaround.
-            </Text>
+              <Text style={[styles.note, { color: colors.muted, textAlign: "center" }]}>
+                Put your phone away — it keeps counting, and it'll buzz at the turnaround.
+              </Text>
+            </FadeSwitch>
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -276,7 +279,7 @@ export default function WalkScreen({ visible, onClose }: { visible: boolean; onC
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
         <View style={styles.topBar}>
           <Text style={[styles.topLabel, { color: colors.muted, fontFamily: fonts.bodyBold }]}>Move today</Text>
-          <TouchableOpacity onPress={onClose}>
+          <TouchableOpacity activeOpacity={0.7} onPress={onClose}>
             <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 12 }}>Exit</Text>
           </TouchableOpacity>
         </View>
@@ -305,7 +308,7 @@ export default function WalkScreen({ visible, onClose }: { visible: boolean; onC
             {WALK_KINDS.map((k) => {
               const on = kind === k.k;
               return (
-                <TouchableOpacity
+                <TouchableOpacity activeOpacity={0.7}
                   key={k.k}
                   onPress={() => setKind(k.k)}
                   style={[styles.pill, { borderColor: on ? colors.ink : colors.line, backgroundColor: on ? colors.ink : colors.raised }]}
@@ -321,7 +324,7 @@ export default function WalkScreen({ visible, onClose }: { visible: boolean; onC
             {WALK_MINS.map((m) => {
               const on = minutes === m;
               return (
-                <TouchableOpacity
+                <TouchableOpacity activeOpacity={0.7}
                   key={m}
                   onPress={() => setMinutes(m)}
                   style={[styles.segBtn, { backgroundColor: on ? colors.ink : colors.sunken }]}
@@ -332,10 +335,10 @@ export default function WalkScreen({ visible, onClose }: { visible: boolean; onC
             })}
           </View>
 
-          <TouchableOpacity style={[styles.primary, { backgroundColor: colors.accent }]} onPress={goStart}>
+          <TouchableOpacity activeOpacity={0.7} style={[styles.primary, { backgroundColor: colors.accent }]} onPress={goStart}>
             <Text style={{ color: colors.accentInk, fontFamily: fonts.bodyBold, fontSize: 15 }}>Start {minutes} minutes</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.ghost} onPress={() => finishWalk(minutes, true)}>
+          <TouchableOpacity activeOpacity={0.7} style={styles.ghost} onPress={() => finishWalk(minutes, true)}>
             <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>I already did it</Text>
           </TouchableOpacity>
           <Text style={[styles.note, { color: colors.muted, textAlign: "center" }]}>

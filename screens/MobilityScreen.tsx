@@ -8,6 +8,7 @@ import { useAppState } from "../lib/appState";
 import { mobilityMinutes, mobilitySteps } from "../lib/mobilityProgram";
 import { mobilityFinishCopy, newMobilityEntry, trainedToday } from "../lib/sessionEngine";
 import CelebrateRing from "../components/workout/CelebrateRing";
+import FadeSwitch from "../components/workout/FadeSwitch";
 import Sheet from "../components/workout/Sheet";
 
 type Result = { big: string; line: string; minutes: number; stretches: number; count: number };
@@ -171,7 +172,7 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
             <Text style={[styles.note, { color: colors.muted, textAlign: "center" }]}>
               Logged to your history, same as a session.
             </Text>
-            <TouchableOpacity style={[styles.primary, { backgroundColor: colors.ink }]} onPress={onClose}>
+            <TouchableOpacity activeOpacity={0.7} style={[styles.primary, { backgroundColor: colors.ink }]} onPress={onClose}>
               <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 15 }}>Done</Text>
             </TouchableOpacity>
           </ScrollView>
@@ -189,7 +190,7 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
           <Text style={[styles.topLabel, { color: colors.muted, fontFamily: fonts.bodyBold }]} numberOfLines={1}>
             Mobility · {i + 1} of {steps.length}
           </Text>
-          <TouchableOpacity onPress={onClose}>
+          <TouchableOpacity activeOpacity={0.7} onPress={onClose}>
             <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 12 }}>Exit</Text>
           </TouchableOpacity>
         </View>
@@ -203,44 +204,46 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
         </View>
 
         <ScrollView contentContainerStyle={styles.body}>
-          <View style={[styles.video, { backgroundColor: colors.ink }]}>
-            <Text style={[styles.videoTitle, { color: colors.paper, fontFamily: fonts.display }]}>{step.n}</Text>
-            <Text style={[styles.videoSub, { color: colors.paper }]}>clip · coming soon</Text>
-          </View>
-
-          <Text style={[styles.name, { color: colors.ink, fontFamily: fonts.display }]}>{step.n}</Text>
-          <Text style={[styles.spec, { color: colors.muted, fontFamily: fonts.mono }]}>{step.sec} sec</Text>
-          <Text style={[styles.cue, { color: colors.ink2 }]}>{step.cue}</Text>
-
-          <View style={[styles.timerRow, { backgroundColor: colors.ink }]}>
-            <View>
-              <Text style={[styles.timerTime, { color: colors.paper, fontFamily: fonts.display }]}>{left}s</Text>
-              <Text style={[styles.timerLabel, { color: colors.paper }]}>Hold</Text>
+          <FadeSwitch id={i}>
+            <View style={[styles.video, { backgroundColor: colors.ink }]}>
+              <Text style={[styles.videoTitle, { color: colors.paper, fontFamily: fonts.display }]}>{step.n}</Text>
+              <Text style={[styles.videoSub, { color: colors.paper }]}>clip · coming soon</Text>
             </View>
-            <View style={[styles.bar, { backgroundColor: "rgba(140,140,140,.35)" }]}>
-              <View style={[styles.barFill, { backgroundColor: colors.accent, width: `${pct}%` }]} />
+
+            <Text style={[styles.name, { color: colors.ink, fontFamily: fonts.display }]}>{step.n}</Text>
+            <Text style={[styles.spec, { color: colors.muted, fontFamily: fonts.mono }]}>{step.sec} sec</Text>
+            <Text style={[styles.cue, { color: colors.ink2 }]}>{step.cue}</Text>
+
+            <View style={[styles.timerRow, { backgroundColor: colors.ink }]}>
+              <View>
+                <Text style={[styles.timerTime, { color: colors.paper, fontFamily: fonts.display }]}>{left}s</Text>
+                <Text style={[styles.timerLabel, { color: colors.paper }]}>Hold</Text>
+              </View>
+              <View style={[styles.bar, { backgroundColor: "rgba(140,140,140,.35)" }]}>
+                <View style={[styles.barFill, { backgroundColor: colors.accent, width: `${pct}%` }]} />
+              </View>
+              <TouchableOpacity activeOpacity={0.7} onPress={toggleGo}>
+                <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 13 }}>
+                  {running ? "Pause" : started ? "Resume" : "Start"}
+                </Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={toggleGo}>
-              <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 13 }}>
-                {running ? "Pause" : started ? "Resume" : "Start"}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          </FadeSwitch>
 
           <View style={styles.helperRow}>
-            <TouchableOpacity
+            <TouchableOpacity activeOpacity={0.7}
               disabled={i === 0}
               onPress={goPrev}
               style={[styles.helperBtn, { borderColor: colors.line, opacity: i === 0 ? 0.4 : 1 }]}
             >
               <Text style={{ color: colors.ink, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>Back</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={goNext} style={[styles.helperBtn, { borderColor: colors.line }]}>
+            <TouchableOpacity activeOpacity={0.7} onPress={goNext} style={[styles.helperBtn, { borderColor: colors.line }]}>
               <Text style={{ color: colors.ink, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>
                 {i === steps.length - 1 ? "Finish" : "Next"}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setHurtSheet(true)} style={[styles.helperBtn, { borderColor: colors.bad }]}>
+            <TouchableOpacity activeOpacity={0.7} onPress={() => setHurtSheet(true)} style={[styles.helperBtn, { borderColor: colors.bad }]}>
               <Text style={{ color: colors.bad, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>This hurts</Text>
             </TouchableOpacity>
           </View>
@@ -256,10 +259,10 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
           <Text style={{ color: colors.ink2, fontSize: 14, lineHeight: 20, marginBottom: 14 }}>
             Stretching should feel like tension, never pain. Skip this one and tell your trainer if it keeps happening.
           </Text>
-          <TouchableOpacity style={[styles.sheetOpt, { backgroundColor: colors.sunken }]} onPress={skipHurt}>
+          <TouchableOpacity activeOpacity={0.7} style={[styles.sheetOpt, { backgroundColor: colors.sunken }]} onPress={skipHurt}>
             <Text style={{ color: colors.ink, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>Skip this stretch</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.sheetOpt, { backgroundColor: colors.sunken, marginTop: 8 }]} onPress={() => setHurtSheet(false)}>
+          <TouchableOpacity activeOpacity={0.7} style={[styles.sheetOpt, { backgroundColor: colors.sunken, marginTop: 8 }]} onPress={() => setHurtSheet(false)}>
             <Text style={{ color: colors.ink, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>It's fine, keep going</Text>
           </TouchableOpacity>
         </Sheet>

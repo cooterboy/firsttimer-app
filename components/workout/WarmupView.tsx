@@ -76,14 +76,14 @@ export default function WarmupView({
         <View style={[styles.bar, { backgroundColor: "rgba(140,140,140,.35)" }]}>
           <View style={[styles.barFill, { backgroundColor: colors.accent, width: `${pct}%` }]} />
         </View>
-        <TouchableOpacity onPress={toggle}>
+        <TouchableOpacity activeOpacity={0.7} onPress={toggle}>
           <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 13 }}>
             {running ? "Pause" : "Start"}
           </Text>
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity onPress={onDone} style={[styles.primary, { backgroundColor: colors.accent }]}>
+      <TouchableOpacity activeOpacity={0.7} onPress={onDone} style={[styles.primary, { backgroundColor: colors.accent }]}>
         <Text style={{ color: colors.accentInk, fontFamily: fonts.bodyBold, fontSize: 15 }}>
           Warmed up, start session
         </Text>

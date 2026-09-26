@@ -55,7 +55,7 @@ export default function SessionDetailSheet({
       <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.lg }]}>RATE THIS SESSION</Text>
       <View style={styles.stars}>
         {[1, 2, 3, 4, 5].map((n) => (
-          <TouchableOpacity
+          <TouchableOpacity activeOpacity={0.7}
             key={n}
             onPress={() => {
               Haptics.selectionAsync().catch(() => {});
@@ -72,7 +72,7 @@ export default function SessionDetailSheet({
         {SESSION_TAGS.map((t) => {
           const on = tags.includes(t);
           return (
-            <TouchableOpacity
+            <TouchableOpacity activeOpacity={0.7}
               key={t}
               onPress={() => {
                 Haptics.selectionAsync().catch(() => {});
@@ -96,7 +96,7 @@ export default function SessionDetailSheet({
           placeholderTextColor={colors.muted}
           style={[styles.noteInput, { color: colors.ink, backgroundColor: colors.sunken }]}
         />
-        <TouchableOpacity
+        <TouchableOpacity activeOpacity={0.7}
           style={[styles.saveBtn, { borderColor: colors.line }]}
           onPress={() => appState.updateHistoryEntry(entry.block, entry.idx, { note: note.trim() })}
         >

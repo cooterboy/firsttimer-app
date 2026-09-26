@@ -35,7 +35,7 @@ export default function AppHeader() {
             </Text>
           </View>
         ) : null}
-        <TouchableOpacity style={[styles.avatar, { backgroundColor: colors.ink }]} onPress={() => navigation.navigate("You")}>
+        <TouchableOpacity activeOpacity={0.7} style={[styles.avatar, { backgroundColor: colors.ink }]} onPress={() => navigation.navigate("You")}>
           <Text style={[styles.avatarText, { color: colors.paper, fontFamily: fonts.display }]}>FT</Text>
         </TouchableOpacity>
       </View>

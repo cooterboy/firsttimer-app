@@ -78,7 +78,7 @@ export default function MovementView({
           <Text style={{ color: colors.ink, fontSize: 13, lineHeight: 19 }}>
             <Text style={{ fontFamily: fonts.bodyBold }}>You skipped this one.</Text> It's still here if you want it.
           </Text>
-          <TouchableOpacity onPress={onUnskip} style={styles.inlineBtnWrap}>
+          <TouchableOpacity activeOpacity={0.7} onPress={onUnskip} style={styles.inlineBtnWrap}>
             <Text style={[styles.inlineBtn, { color: colors.ink, borderColor: colors.line }]}>Actually, I'll do it</Text>
           </TouchableOpacity>
         </View>
@@ -90,7 +90,7 @@ export default function MovementView({
         <Text style={[styles.videoSub, { color: colors.paper }]}>20-second clip · coming soon</Text>
       </View>
 
-      <TouchableOpacity onPress={onOpenInfo} style={styles.nameRow}>
+      <TouchableOpacity activeOpacity={0.7} onPress={onOpenInfo} style={styles.nameRow}>
         <Text style={[styles.name, { color: colors.ink, fontFamily: fonts.display }]}>{move.n}</Text>
         <View style={[styles.infoI, { borderColor: colors.muted }]}>
           <Text style={{ color: colors.muted, fontSize: 11, fontFamily: fonts.bodyBold }}>i</Text>
@@ -102,7 +102,7 @@ export default function MovementView({
 
       <Text style={[styles.hint, { color: colors.muted }]}>{hintLine}</Text>
       {firstTime ? (
-        <TouchableOpacity
+        <TouchableOpacity activeOpacity={0.7}
           onPress={onOpenFindWeight}
           style={[styles.ghost, { borderColor: colors.accent }]}
         >
@@ -163,7 +163,7 @@ export default function MovementView({
               ]}
             />
           </View>
-          <TouchableOpacity disabled={rest.hold > 0} onPress={onSkipRest}>
+          <TouchableOpacity activeOpacity={0.7} disabled={rest.hold > 0} onPress={onSkipRest}>
             <Text style={{ color: colors.paper, opacity: rest.hold > 0 ? 0.45 : 1, fontFamily: fonts.bodyBold, fontSize: 13 }}>
               {rest.hold > 0 ? `Skip in ${rest.hold}` : "Skip"}
             </Text>
@@ -183,7 +183,7 @@ export default function MovementView({
             {(["easy", "right", "hard"] as const).map((f) => {
               const on = move.feel === f;
               return (
-                <TouchableOpacity
+                <TouchableOpacity activeOpacity={0.7}
                   key={f}
                   onPress={() => {
                     Haptics.selectionAsync().catch(() => {});
@@ -201,7 +201,7 @@ export default function MovementView({
               );
             })}
           </View>
-          <TouchableOpacity
+          <TouchableOpacity activeOpacity={0.7}
             disabled={!move.feel}
             onPress={onNext}
             style={[styles.primary, { backgroundColor: colors.accent, opacity: move.feel ? 1 : 0.4 }]}
@@ -230,21 +230,21 @@ export default function MovementView({
       ) : null}
 
       <View style={styles.helpers}>
-        <TouchableOpacity style={[styles.helperBtn, { borderColor: colors.line }]} onPress={() => onOpenSwap("sub")}>
+        <TouchableOpacity activeOpacity={0.7} style={[styles.helperBtn, { borderColor: colors.line }]} onPress={() => onOpenSwap("sub")}>
           <Text style={[styles.helperText, { color: colors.ink2 }]}>Machine taken</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.helperBtn, { borderColor: colors.line }]} onPress={() => onOpenSwap("easier")}>
+        <TouchableOpacity activeOpacity={0.7} style={[styles.helperBtn, { borderColor: colors.line }]} onPress={() => onOpenSwap("easier")}>
           <Text style={[styles.helperText, { color: colors.ink2 }]}>Too hard</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.helperBtn, { borderColor: colors.bad }]} onPress={onOpenHurt}>
+        <TouchableOpacity activeOpacity={0.7} style={[styles.helperBtn, { borderColor: colors.bad }]} onPress={onOpenHurt}>
           <Text style={[styles.helperText, { color: colors.bad }]}>This hurts</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.helperBtn, { borderColor: colors.line }]} onPress={onOpenNote}>
+        <TouchableOpacity activeOpacity={0.7} style={[styles.helperBtn, { borderColor: colors.line }]} onPress={onOpenNote}>
           <Text style={[styles.helperText, { color: colors.ink2 }]}>Note</Text>
         </TouchableOpacity>
       </View>
       {!dropSet ? (
-        <TouchableOpacity onPress={onOpenShortOnTime} style={[styles.ghost, { borderColor: colors.line, marginTop: 8 }]}>
+        <TouchableOpacity activeOpacity={0.7} onPress={onOpenShortOnTime} style={[styles.ghost, { borderColor: colors.line, marginTop: 8 }]}>
           <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>Short on time today</Text>
         </TouchableOpacity>
       ) : null}

@@ -191,7 +191,7 @@ export default function FinishView({
         <Text style={[styles.fieldLabel, { color: colors.muted }]}>RATE THIS SESSION</Text>
         <View style={styles.stars}>
           {[1, 2, 3, 4, 5].map((n) => (
-            <TouchableOpacity
+            <TouchableOpacity activeOpacity={0.7}
               key={n}
               onPress={() => {
                 Haptics.selectionAsync().catch(() => {});
@@ -211,7 +211,7 @@ export default function FinishView({
           {SESSION_TAGS.map((t) => {
             const on = tags.includes(t);
             return (
-              <TouchableOpacity
+              <TouchableOpacity activeOpacity={0.7}
                 key={t}
                 onPress={() => {
                   Haptics.selectionAsync().catch(() => {});
@@ -242,7 +242,7 @@ export default function FinishView({
             placeholderTextColor={colors.muted}
             style={[styles.noteInput, { color: colors.ink, backgroundColor: colors.sunken }]}
           />
-          <TouchableOpacity
+          <TouchableOpacity activeOpacity={0.7}
             style={[styles.inlineBtn, { borderColor: colors.line }]}
             onPress={() => {
               onSaveEntry({ note: note.trim() });
@@ -261,13 +261,13 @@ export default function FinishView({
         ) : null}
       </Card>
 
-      <TouchableOpacity style={[styles.shareBtn, { backgroundColor: colors.ink }]} onPress={share}>
+      <TouchableOpacity activeOpacity={0.7} style={[styles.shareBtn, { backgroundColor: colors.ink }]} onPress={share}>
         <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 15 }}>Share this</Text>
       </TouchableOpacity>
       <Text style={[styles.note, { color: colors.muted, textAlign: "center", marginTop: 10 }]}>
         Missed something? Every session reopens from Progress → History.
       </Text>
-      <TouchableOpacity style={[styles.primary, { backgroundColor: colors.accent }]} onPress={onDone}>
+      <TouchableOpacity activeOpacity={0.7} style={[styles.primary, { backgroundColor: colors.accent }]} onPress={onDone}>
         <Text style={{ color: colors.accentInk, fontFamily: fonts.bodyBold, fontSize: 15 }}>
           {blockDone ? "See what you built" : "Done for today"}
         </Text>

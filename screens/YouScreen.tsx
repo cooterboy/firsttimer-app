@@ -53,7 +53,7 @@ export default function YouScreen() {
 
         <Text style={[styles.eyebrow, { color: colors.muted }]}>TRAINING</Text>
         <Card style={{ padding: 0, overflow: "hidden" }}>
-          <TouchableOpacity style={styles.item} onPress={() => navigation.navigate("TrainingPreferences")}>
+          <TouchableOpacity activeOpacity={0.7} style={styles.item} onPress={() => navigation.navigate("TrainingPreferences")}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>
                 Training preferences
@@ -66,14 +66,14 @@ export default function YouScreen() {
 
         <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.lg }]}>APP</Text>
         <Card style={{ padding: 0, overflow: "hidden" }}>
-          <TouchableOpacity style={[styles.item, { borderBottomWidth: 1, borderBottomColor: colors.line }]} onPress={() => navigation.navigate("Settings")}>
+          <TouchableOpacity activeOpacity={0.7} style={[styles.item, { borderBottomWidth: 1, borderBottomColor: colors.line }]} onPress={() => navigation.navigate("Settings")}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Settings</Text>
               <Text style={[styles.itemSub, { color: colors.muted }]}>{profile.units === "metric" ? "kg" : "lb"} units</Text>
             </View>
             <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.item} onPress={() => navigation.navigate("Account")}>
+          <TouchableOpacity activeOpacity={0.7} style={styles.item} onPress={() => navigation.navigate("Account")}>
             <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Account</Text>
             <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
           </TouchableOpacity>
@@ -91,7 +91,7 @@ export default function YouScreen() {
         {__DEV__ ? (
           <>
             <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.lg }]}>DEV ONLY</Text>
-            <TouchableOpacity
+            <TouchableOpacity activeOpacity={0.7}
               style={[styles.btn, { borderColor: colors.line }]}
               onPress={async () => {
                 await appState.resetTestData();
@@ -100,7 +100,7 @@ export default function YouScreen() {
             >
               <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>Reset test data</Text>
             </TouchableOpacity>
-            <TouchableOpacity
+            <TouchableOpacity activeOpacity={0.7}
               style={[styles.btn, { borderColor: colors.line, marginTop: spacing.sm }]}
               onPress={() => {
                 appState.devSeedNearBlockEnd();

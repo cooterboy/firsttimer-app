@@ -53,7 +53,7 @@ export default function SetRow({
 
       {isWeight ? (
         <View style={styles.stepperRow}>
-          <TouchableOpacity
+          <TouchableOpacity activeOpacity={0.7}
             accessibilityLabel={`${label} lighter`}
             style={[styles.stepBtn, { borderColor: colors.line, backgroundColor: colors.raised }]}
             onPress={() => {
@@ -73,7 +73,7 @@ export default function SetRow({
               { color: colors.ink, backgroundColor: colors.sunken, fontFamily: fonts.mono },
             ]}
           />
-          <TouchableOpacity
+          <TouchableOpacity activeOpacity={0.7}
             accessibilityLabel={`${label} heavier`}
             style={[styles.stepBtn, { borderColor: colors.line, backgroundColor: colors.raised }]}
             onPress={() => {
@@ -89,7 +89,7 @@ export default function SetRow({
         <Text style={[styles.specText, { color: colors.ink, fontFamily: fonts.monoBold }]}>{specRight}</Text>
       )}
 
-      <TouchableOpacity
+      <TouchableOpacity activeOpacity={0.7}
         disabled={locked}
         accessibilityLabel={locked ? `${label} — wait ${holdSeconds} seconds` : `${label} done`}
         style={[

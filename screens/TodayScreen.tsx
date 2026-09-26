@@ -146,7 +146,7 @@ export default function TodayScreen() {
             {mobilityToday(appState.mobility) ? (
               <MobilityDoneBanner colors={colors} minutes={appState.mobility[appState.mobility.length - 1].minutes} />
             ) : mobilityDue(appState.mobility, appState.settings.mobility) && done > 0 ? (
-              <TouchableOpacity style={[styles.ghostBtn, { borderColor: colors.line }]} onPress={workoutModal.openMobility}>
+              <TouchableOpacity activeOpacity={0.7} style={[styles.ghostBtn, { borderColor: colors.line }]} onPress={workoutModal.openMobility}>
                 <Text style={{ color: colors.ink, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>
                   {trainedToday
                     ? `Loosen up: ${mobilityMinutes()} minutes of mobility`
@@ -429,7 +429,7 @@ function WalkCard({
             </Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.infoRow} onPress={onPress}>
+        <TouchableOpacity activeOpacity={0.7} style={styles.infoRow} onPress={onPress}>
           <View style={[styles.infoIcon, { backgroundColor: colors.sunken }]}>
             <Text style={{ color: colors.muted }}>▶</Text>
           </View>
@@ -443,7 +443,7 @@ function WalkCard({
   }
   return (
     <Card style={{ marginTop: spacing.md, padding: 0, overflow: "hidden" }}>
-      <TouchableOpacity style={styles.infoRow} onPress={onPress}>
+      <TouchableOpacity activeOpacity={0.7} style={styles.infoRow} onPress={onPress}>
         <View style={[styles.infoIcon, { backgroundColor: colors.sunken }]}>
           <Text style={{ color: colors.muted }}>▶</Text>
         </View>

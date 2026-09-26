@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Animated, Text, TouchableOpacity, View, StyleSheet } from "react-native";
+import { Animated, Easing, Text, TouchableOpacity, View, StyleSheet } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import * as Haptics from "expo-haptics";
 import { useTheme } from "../../lib/ThemeContext";
@@ -94,6 +94,7 @@ export default function CelebrateView({
 }) {
   const { colors } = useTheme();
 
+  const entranceAnim = useRef(new Animated.Value(0)).current;
   const ringAnim = useRef(new Animated.Value(0)).current;
   const checkAnim = useRef(new Animated.Value(0)).current;
   const bigAnim = useRef(new Animated.Value(0)).current;
@@ -104,8 +105,18 @@ export default function CelebrateView({
 
   useEffect(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    Animated.timing(ringAnim, { toValue: 1, duration: 1000, delay: 100, useNativeDriver: false }).start();
-    Animated.timing(checkAnim, { toValue: 1, duration: 450, delay: 700, useNativeDriver: true }).start();
+    // The ring container pops in first — a scale+fade that's unmistakably motion —
+    // then the stroke sweeps around it, then the checkmark springs in with a little
+    // overshoot. Three distinct beats instead of one flat fade.
+    Animated.spring(entranceAnim, { toValue: 1, friction: 6, tension: 55, delay: 60, useNativeDriver: true }).start();
+    Animated.timing(ringAnim, {
+      toValue: 1,
+      duration: 1100,
+      delay: 180,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+    Animated.spring(checkAnim, { toValue: 1, friction: 5, tension: 140, delay: 750, useNativeDriver: true }).start();
     const t = setTimeout(() => setStatsStarted(true), 880);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,7 +129,15 @@ export default function CelebrateView({
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.ringBox}>
+      <Animated.View
+        style={[
+          styles.ringBox,
+          {
+            opacity: entranceAnim,
+            transform: [{ scale: entranceAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }],
+          },
+        ]}
+      >
         <Svg width={112} height={112} viewBox="0 0 120 120" style={{ transform: [{ rotate: "-90deg" }] }}>
           <Circle cx={60} cy={60} r={RING_R} stroke={colors.line} strokeWidth={7} fill="none" />
           <AnimatedCircle
@@ -138,13 +157,13 @@ export default function CelebrateView({
             styles.checkWrap,
             {
               opacity: checkAnim,
-              transform: [{ scale: checkAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
+              transform: [{ scale: checkAnim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }],
             },
           ]}
         >
           <Text style={[styles.check, { color: colors.good }]}>✓</Text>
         </Animated.View>
-      </View>
+      </Animated.View>
 
       <Reveal anim={bigAnim} delay={500}>
         <Text style={[styles.big, { color: colors.ink, fontFamily: fonts.display }]}>{fc.big}</Text>
@@ -180,13 +199,13 @@ export default function CelebrateView({
 
       <Reveal anim={actsAnim} delay={1040} style={styles.acts}>
         <>
-          <TouchableOpacity style={[styles.primary, { backgroundColor: colors.accent }]} onPress={onSeeResults}>
+          <TouchableOpacity activeOpacity={0.7} style={[styles.primary, { backgroundColor: colors.accent }]} onPress={onSeeResults}>
             <Text style={{ color: colors.accentInk, fontFamily: fonts.bodyBold, fontSize: 15 }}>See your results</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.primaryDark, { backgroundColor: colors.ink }]} onPress={onShare}>
+          <TouchableOpacity activeOpacity={0.7} style={[styles.primaryDark, { backgroundColor: colors.ink }]} onPress={onShare}>
             <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 15 }}>Share this session</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.ghost} onPress={onDone}>
+          <TouchableOpacity activeOpacity={0.7} style={styles.ghost} onPress={onDone}>
             <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>
               {blockDone ? "See what you built" : "Done for today"}
             </Text>

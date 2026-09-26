@@ -34,6 +34,7 @@ import {
   setFeedback,
   movedToday,
 } from "../lib/sessionEngine";
+import FadeSwitch from "../components/workout/FadeSwitch";
 import WarmupView from "../components/workout/WarmupView";
 import MovementView from "../components/workout/MovementView";
 import CelebrateView from "../components/workout/CelebrateView";
@@ -268,7 +269,7 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
           <View style={styles.topBar}>
             <View style={styles.topRow}>
               {wo.mi > 0 ? (
-                <TouchableOpacity onPress={() => goMove(wo.mi - 1)} style={styles.backBtn}>
+                <TouchableOpacity activeOpacity={0.7} onPress={() => goMove(wo.mi - 1)} style={styles.backBtn}>
                   <Text style={{ color: colors.ink, fontSize: 20 }}>‹</Text>
                 </TouchableOpacity>
               ) : (
@@ -277,7 +278,7 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
               <Text style={[styles.label, { color: colors.muted, fontFamily: fonts.bodyBold }]} numberOfLines={1}>
                 {label}
               </Text>
-              <TouchableOpacity onPress={() => closeAndReset(false)}>
+              <TouchableOpacity activeOpacity={0.7} onPress={() => closeAndReset(false)}>
                 <Text style={[styles.exitText, { color: colors.ink2, fontFamily: fonts.bodySemiBold }]}>Save & exit</Text>
               </TouchableOpacity>
             </View>
@@ -286,7 +287,7 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
                 const here = i === wo.mi;
                 const bg = here ? colors.accent : m.skipped ? colors.muted : moveDone(m) ? colors.good : colors.line;
                 return (
-                  <TouchableOpacity key={i} style={styles.dotWrap} onPress={() => goMove(i)}>
+                  <TouchableOpacity activeOpacity={0.7} key={i} style={styles.dotWrap} onPress={() => goMove(i)}>
                     <View style={[styles.dot, { backgroundColor: bg, opacity: m.skipped && !here ? 0.45 : 1 }]} />
                   </TouchableOpacity>
                 );
@@ -297,36 +298,40 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
 
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-          {phase === "warmup" && wo.moves[wo.mi] ? (
-            <WarmupView move={wo.moves[wo.mi]} gym={profile.where === "gym"} onDone={onWarmupDone} />
-          ) : null}
+          {(phase === "warmup" || phase === "movement") && (
+            <FadeSwitch id={wo.mi}>
+              {phase === "warmup" && wo.moves[wo.mi] ? (
+                <WarmupView move={wo.moves[wo.mi]} gym={profile.where === "gym"} onDone={onWarmupDone} />
+              ) : null}
 
-          {phase === "movement" && move ? (
-            <MovementView
-              move={move}
-              moveIndex={wo.mi}
-              allMoves={wo.moves}
-              units={profile.units}
-              rest={restState}
-              lastNote={lastNoteFor(move.n)}
-              onChangeSetValue={onChangeSetValue}
-              onStepSet={onStepSet}
-              onToggleSet={onToggleSet}
-              onSetFeel={onSetFeel}
-              onNext={advance}
-              onSkipRest={() => {
-                if (!restState || restState.hold <= 0) clearRest();
-              }}
-              onOpenInfo={onOpenInfo}
-              onOpenSwap={onOpenSwap}
-              onOpenHurt={onOpenHurt}
-              onOpenNote={onOpenNote}
-              onOpenFindWeight={onOpenFindWeight}
-              onOpenShortOnTime={onOpenShortOnTime}
-              onUnskip={onUnskip}
-              dropSet={!!wo.dropSet}
-            />
-          ) : null}
+              {phase === "movement" && move ? (
+                <MovementView
+                  move={move}
+                  moveIndex={wo.mi}
+                  allMoves={wo.moves}
+                  units={profile.units}
+                  rest={restState}
+                  lastNote={lastNoteFor(move.n)}
+                  onChangeSetValue={onChangeSetValue}
+                  onStepSet={onStepSet}
+                  onToggleSet={onToggleSet}
+                  onSetFeel={onSetFeel}
+                  onNext={advance}
+                  onSkipRest={() => {
+                    if (!restState || restState.hold <= 0) clearRest();
+                  }}
+                  onOpenInfo={onOpenInfo}
+                  onOpenSwap={onOpenSwap}
+                  onOpenHurt={onOpenHurt}
+                  onOpenNote={onOpenNote}
+                  onOpenFindWeight={onOpenFindWeight}
+                  onOpenShortOnTime={onOpenShortOnTime}
+                  onUnskip={onUnskip}
+                  dropSet={!!wo.dropSet}
+                />
+              ) : null}
+            </FadeSwitch>
+          )}
 
           {phase === "celebrate" && wo.fc ? (
             <CelebrateView

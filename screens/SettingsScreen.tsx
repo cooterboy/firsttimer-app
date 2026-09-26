@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import * as Haptics from "expo-haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
@@ -15,8 +16,12 @@ function Seg<T extends string>({ value, options, onChange }: { value: T; options
         const on = value === o.v;
         return (
           <TouchableOpacity
+            activeOpacity={0.7}
             key={o.v}
-            onPress={() => onChange(o.v)}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              onChange(o.v);
+            }}
             style={[styles.segBtn, on && { backgroundColor: colors.raised }]}
           >
             <Text style={{ color: on ? colors.ink : colors.muted, fontFamily: fonts.bodyBold, fontSize: 12 }}>{o.l}</Text>
@@ -48,6 +53,13 @@ function Row({
   );
 }
 
+function hapticToggle<T>(fn: (v: T) => void) {
+  return (v: T) => {
+    Haptics.selectionAsync().catch(() => {});
+    fn(v);
+  };
+}
+
 export default function SettingsScreen() {
   const { colors, mode, setMode } = useTheme();
   const appState = useAppState();
@@ -66,7 +78,7 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={{ color: colors.ink, fontSize: 20 }}>‹</Text>
         </TouchableOpacity>
         <Text style={[styles.topTitle, { color: colors.ink, fontFamily: fonts.bodyBold }]}>Settings</Text>
@@ -111,7 +123,7 @@ export default function SettingsScreen() {
             right={
               <Switch
                 value={appState.settings.autoRest}
-                onValueChange={(v) => appState.updateSettings({ autoRest: v })}
+                onValueChange={hapticToggle((v: boolean) => appState.updateSettings({ autoRest: v }))}
               />
             }
           />
@@ -133,7 +145,7 @@ export default function SettingsScreen() {
           <Row
             title="Warm-up step"
             sub="Five-minute timer before the first movement."
-            right={<Switch value={appState.settings.warmup} onValueChange={(v) => appState.updateSettings({ warmup: v })} />}
+            right={<Switch value={appState.settings.warmup} onValueChange={hapticToggle((v: boolean) => appState.updateSettings({ warmup: v }))} />}
           />
           <Row
             title="Mobility day"
@@ -160,7 +172,7 @@ export default function SettingsScreen() {
             right={
               <Switch
                 value={appState.settings.reminders}
-                onValueChange={(v) => appState.updateSettings({ reminders: v })}
+                onValueChange={hapticToggle((v: boolean) => appState.updateSettings({ reminders: v }))}
               />
             }
           />
@@ -180,7 +192,7 @@ export default function SettingsScreen() {
           <Row
             title="Weekly weigh-in prompt"
             sub="Asks once a week on your first training day."
-            right={<Switch value={appState.settings.weighin} onValueChange={(v) => appState.updateSettings({ weighin: v })} />}
+            right={<Switch value={appState.settings.weighin} onValueChange={hapticToggle((v: boolean) => appState.updateSettings({ weighin: v }))} />}
           />
         </View>
         <Text style={[styles.note, { color: colors.muted }]}>

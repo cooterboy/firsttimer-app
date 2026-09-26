@@ -11,6 +11,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as Haptics from "expo-haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
@@ -40,6 +41,7 @@ export default function AuthScreen() {
   const [resetSent, setResetSent] = useState(false);
 
   const submitSignUp = async () => {
+    Haptics.selectionAsync().catch(() => {});
     setError("");
     if (!name.trim()) return setError("What should we call you?");
     if (!email.includes("@")) return setError("That email doesn't look right.");
@@ -57,6 +59,7 @@ export default function AuthScreen() {
   };
 
   const submitSignIn = async () => {
+    Haptics.selectionAsync().catch(() => {});
     setSiError("");
     setBusy(true);
     try {
@@ -108,12 +111,12 @@ export default function AuthScreen() {
                 </Text>
               </View>
               <View>
-                <TouchableOpacity style={[styles.primary, { backgroundColor: colors.accent }]} onPress={() => setMode("signup")}>
+                <TouchableOpacity activeOpacity={0.7} style={[styles.primary, { backgroundColor: colors.accent }]} onPress={() => setMode("signup")}>
                   <Text style={[styles.primaryText, { color: colors.accentInk, fontFamily: fonts.display }]}>
                     Get started
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.ghost, { borderColor: colors.line }]} onPress={() => setMode("signin")}>
+                <TouchableOpacity activeOpacity={0.7} style={[styles.ghost, { borderColor: colors.line }]} onPress={() => setMode("signin")}>
                   <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>
                     I already have an account
                   </Text>
@@ -158,7 +161,7 @@ export default function AuthScreen() {
                     placeholderTextColor={colors.muted}
                     style={[styles.input, { flex: 1, color: colors.ink, backgroundColor: colors.sunken }]}
                   />
-                  <TouchableOpacity style={[styles.inlineBtn, { borderColor: colors.line }]} onPress={() => setShowPw((s) => !s)}>
+                  <TouchableOpacity activeOpacity={0.7} style={[styles.inlineBtn, { borderColor: colors.line }]} onPress={() => setShowPw((s) => !s)}>
                     <Text style={{ color: colors.ink, fontFamily: fonts.bodyBold, fontSize: 11 }}>
                       {showPw ? "HIDE" : "SHOW"}
                     </Text>
@@ -174,7 +177,7 @@ export default function AuthScreen() {
                 {(["imperial", "metric"] as const).map((u) => {
                   const on = units === u;
                   return (
-                    <TouchableOpacity
+                    <TouchableOpacity activeOpacity={0.7}
                       key={u}
                       onPress={() => setUnits(u)}
                       style={[styles.segBtn, { backgroundColor: on ? colors.raised : "transparent" }]}
@@ -189,7 +192,7 @@ export default function AuthScreen() {
 
               {error ? <Text style={[styles.error, { color: colors.bad }]}>{error}</Text> : null}
 
-              <TouchableOpacity
+              <TouchableOpacity activeOpacity={0.7}
                 disabled={busy}
                 style={[styles.primary, { backgroundColor: colors.accent, marginTop: spacing.lg, opacity: busy ? 0.6 : 1 }]}
                 onPress={submitSignUp}
@@ -200,7 +203,7 @@ export default function AuthScreen() {
                   </Text>
                 )}
               </TouchableOpacity>
-              <TouchableOpacity style={styles.linkBtn} onPress={() => setMode("welcome")}>
+              <TouchableOpacity activeOpacity={0.7} style={styles.linkBtn} onPress={() => setMode("welcome")}>
                 <Text style={{ color: colors.ink2, fontSize: 13 }}>Back</Text>
               </TouchableOpacity>
             </View>
@@ -232,7 +235,7 @@ export default function AuthScreen() {
                     placeholderTextColor={colors.muted}
                     style={[styles.input, { flex: 1, color: colors.ink, backgroundColor: colors.sunken }]}
                   />
-                  <TouchableOpacity style={[styles.inlineBtn, { borderColor: colors.line }]} onPress={() => setSiShowPw((s) => !s)}>
+                  <TouchableOpacity activeOpacity={0.7} style={[styles.inlineBtn, { borderColor: colors.line }]} onPress={() => setSiShowPw((s) => !s)}>
                     <Text style={{ color: colors.ink, fontFamily: fonts.bodyBold, fontSize: 11 }}>
                       {siShowPw ? "HIDE" : "SHOW"}
                     </Text>
@@ -245,7 +248,7 @@ export default function AuthScreen() {
                 <Text style={[styles.note, { color: colors.good }]}>Check your email for a reset link.</Text>
               ) : null}
 
-              <TouchableOpacity
+              <TouchableOpacity activeOpacity={0.7}
                 disabled={busy}
                 style={[styles.primary, { backgroundColor: colors.accent, marginTop: spacing.sm, opacity: busy ? 0.6 : 1 }]}
                 onPress={submitSignIn}
@@ -254,13 +257,13 @@ export default function AuthScreen() {
                   <Text style={[styles.primaryText, { color: colors.accentInk, fontFamily: fonts.display }]}>Sign in</Text>
                 )}
               </TouchableOpacity>
-              <TouchableOpacity style={styles.linkBtn} onPress={submitReset}>
+              <TouchableOpacity activeOpacity={0.7} style={styles.linkBtn} onPress={submitReset}>
                 <Text style={{ color: colors.ink2, fontSize: 13 }}>Forgot password?</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.linkBtn} onPress={() => setMode("signup")}>
+              <TouchableOpacity activeOpacity={0.7} style={styles.linkBtn} onPress={() => setMode("signup")}>
                 <Text style={{ color: colors.ink2, fontSize: 13 }}>New here? Create an account</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.linkBtn} onPress={() => setMode("welcome")}>
+              <TouchableOpacity activeOpacity={0.7} style={styles.linkBtn} onPress={() => setMode("welcome")}>
                 <Text style={{ color: colors.muted, fontSize: 12 }}>Back</Text>
               </TouchableOpacity>
             </View>
@@ -272,7 +275,7 @@ export default function AuthScreen() {
               <Text style={[styles.lede, { color: colors.ink2 }]}>
                 We sent a confirmation link to {email}. Tap it, then come back here and sign in.
               </Text>
-              <TouchableOpacity
+              <TouchableOpacity activeOpacity={0.7}
                 style={[styles.primary, { backgroundColor: colors.accent, marginTop: spacing.lg }]}
                 onPress={() => {
                   setSiEmail(email);

@@ -30,7 +30,7 @@ function Opt({
 }) {
   const { colors } = useTheme();
   return (
-    <TouchableOpacity
+    <TouchableOpacity activeOpacity={0.7}
       style={[
         styles.opt,
         { borderColor: accent ? colors.accent : colors.line, backgroundColor: accent ? colors.accent : colors.raised },
@@ -142,7 +142,7 @@ export function NoteSheetContent({
         {MOVE_TAGS.map((t) => {
           const on = tags.includes(t);
           return (
-            <TouchableOpacity
+            <TouchableOpacity activeOpacity={0.7}
               key={t}
               onPress={() => {
                 Haptics.selectionAsync().catch(() => {});

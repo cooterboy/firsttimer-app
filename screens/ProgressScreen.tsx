@@ -299,7 +299,7 @@ function History({
           })
           .join(" · ");
         return (
-          <TouchableOpacity key={h.id} onPress={() => onOpen(h)} style={[styles.histRow, border]}>
+          <TouchableOpacity activeOpacity={0.7} key={h.id} onPress={() => onOpen(h)} style={[styles.histRow, border]}>
             <View style={styles.histTop}>
               <Text style={[styles.histTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>
                 Block {h.block} · Session {h.idx + 1} · {h.letter}
@@ -330,7 +330,7 @@ function History({
           </TouchableOpacity>
         );
       })}
-      <TouchableOpacity style={[styles.ghostBtn, { borderColor: colors.line }]} onPress={onBackfill}>
+      <TouchableOpacity activeOpacity={0.7} style={[styles.ghostBtn, { borderColor: colors.line }]} onPress={onBackfill}>
         <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>
           Add a session I forgot
         </Text>

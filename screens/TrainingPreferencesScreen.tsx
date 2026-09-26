@@ -2,6 +2,7 @@ import React from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import * as Haptics from "expo-haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
@@ -24,7 +25,7 @@ export default function TrainingPreferencesScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={{ color: colors.ink, fontSize: 20 }}>‹</Text>
         </TouchableOpacity>
         <Text style={[styles.topTitle, { color: colors.ink, fontFamily: fonts.bodyBold }]}>Training preferences</Text>
@@ -52,8 +53,12 @@ export default function TrainingPreferencesScreen() {
                 const on = length === o.v;
                 return (
                   <TouchableOpacity
+                    activeOpacity={0.7}
                     key={o.v}
-                    onPress={() => appState.updateProfile({ length: o.v })}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      appState.updateProfile({ length: o.v });
+                    }}
                     style={[styles.segBtn, on && { backgroundColor: colors.raised }]}
                   >
                     <Text style={{ color: on ? colors.ink : colors.muted, fontFamily: fonts.bodyBold, fontSize: 12 }}>
