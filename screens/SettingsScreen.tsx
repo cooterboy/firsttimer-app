@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
@@ -53,6 +53,15 @@ export default function SettingsScreen() {
   const appState = useAppState();
   const navigation = useNavigation<any>();
   const [remindTime, setRemindTime] = useState(appState.settings.remindTime);
+  // Same defensive re-sync as Account (see its comment) — cheap insurance against
+  // screen-instance reuse, even though nothing outside this screen currently
+  // changes remindTime.
+  useFocusEffect(
+    React.useCallback(() => {
+      setRemindTime(appState.settings.remindTime);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [appState.settings.remindTime])
+  );
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>

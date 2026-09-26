@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing, type } from "../lib/theme";
 import { useAppState } from "../lib/appState";
@@ -71,10 +71,11 @@ export default function AccountScreen() {
   const navigation = useNavigation<any>();
   const u = unit(appState.profile.units);
 
+  const isMetric = appState.profile.units === "metric";
+
   const [name, setName] = useState(appState.profile.name);
   const [age, setAge] = useState(appState.profile.age ? String(appState.profile.age) : "");
   const [weight, setWeight] = useState(appState.profile.weight ? String(appState.profile.weight) : "");
-  const isMetric = appState.profile.units === "metric";
   const [heightCm, setHeightCm] = useState(appState.profile.heightCm ? String(appState.profile.heightCm) : "");
   const [heightFt, setHeightFt] = useState(
     appState.profile.heightCm ? String(Math.floor(appState.profile.heightCm / 2.54 / 12)) : ""
@@ -85,6 +86,25 @@ export default function AccountScreen() {
   const [goal, setGoal] = useState<Goal | null>(appState.profile.goal);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // useState's initial value only applies on first mount — React Navigation's
+  // native-stack reuses this screen instance if you navigate away and back
+  // (e.g. via Settings), so without this, a unit conversion or any other
+  // profile change made elsewhere wouldn't show up here until app restart.
+  // Re-sync from the source of truth every time this screen regains focus.
+  useFocusEffect(
+    React.useCallback(() => {
+      const p = appState.profile;
+      setName(p.name);
+      setAge(p.age ? String(p.age) : "");
+      setWeight(p.weight ? String(p.weight) : "");
+      setHeightCm(p.heightCm ? String(p.heightCm) : "");
+      setHeightFt(p.heightCm ? String(Math.floor(p.heightCm / 2.54 / 12)) : "");
+      setHeightIn(p.heightCm ? String(Math.round((p.heightCm / 2.54) % 12)) : "");
+      setGoal(p.goal);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [appState.profile])
+  );
 
   const save = () => {
     const nextHeightCm = isMetric
