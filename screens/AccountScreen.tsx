@@ -8,6 +8,7 @@ import { useAppState } from "../lib/appState";
 import { unit } from "../lib/gymProgram";
 import { historyCsv, historyJson, nutritionCard } from "../lib/sessionEngine";
 import { saveAndShare } from "../lib/exportFile";
+import { clearCachedState } from "../lib/localCache";
 import { Goal } from "../lib/types";
 import { supabase } from "../lib/supabase";
 import Card from "../components/Card";
@@ -165,6 +166,7 @@ export default function AccountScreen() {
     try {
       const { error } = await supabase.functions.invoke("delete-account");
       if (error) throw error;
+      if (appState.userId) await clearCachedState(appState.userId);
       await appState.signOut();
     } catch (e: any) {
       setDeleting(false);

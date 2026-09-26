@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "./supabase";
 import { fetchRemoteState, pushProfile, pushSession, pushSettings, resetTestData as resetTestDataRemote } from "./sync";
+import { loadCachedState, saveCachedState, type CachedState } from "./localCache";
 import { convertHistoryUnits, convertProfileWeight, devSeedNearBlockEnd } from "./sessionEngine";
 import { ActiveWorkout, HistoryEntry, Profile, Settings } from "./types";
 
@@ -91,6 +92,13 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   // Applied the moment a real, confirmed session shows up.
   const pendingSignup = useRef<{ name: string; units: Profile["units"] } | null>(null);
 
+  // Guards the write-through cache effect below against a real race: setUserId
+  // commits (and can render) before the async cache read resolves, and without
+  // this guard that in-between render — userId set, profile still the in-memory
+  // default — would overwrite a perfectly good on-disk cache with blank data.
+  // Flips true once the boot sequence has decided what to show, cache hit or not.
+  const bootSettled = useRef(false);
+
   const resetLocal = () => {
     setProfile(defaultProfile);
     setSettings(defaultSettings);
@@ -103,7 +111,25 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setSyncError(false);
   };
 
-  const hydrateFrom = async (uid: string) => {
+  // Shared by both the local-cache apply and the real network hydrate below, so a
+  // cached snapshot and a fresh server one paint through the exact same path.
+  // Deliberately excludes `active` — the server has no concept of an in-progress
+  // workout, so a remote hydrate must never touch (or wipe) it; only the cache
+  // path restores it, explicitly, below.
+  const applyState = (s: Omit<CachedState, "active">) => {
+    setProfile(s.profile);
+    setSettings({ ...defaultSettings, ...(s.settings || {}) });
+    setBlock(s.block);
+    setSession(s.session);
+    setStreak(s.streak);
+    setLastDate(s.lastDate);
+    setHistory(s.history);
+  };
+
+  // The actual network fetch + reconcile. Never awaited by the boot sequence — it
+  // runs quietly in the background after cached (or blank) state is already on
+  // screen, and just updates state again once it resolves.
+  const refreshRemote = async (uid: string) => {
     try {
       const remote = await fetchRemoteState(uid);
       if (remote) {
@@ -120,18 +146,13 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
             lastDate: remote.lastDate,
           }).catch((e) => console.warn("Profile save failed, staying local:", e));
         }
-        setProfile(profileToUse);
-        setSettings({ ...defaultSettings, ...(remote.settings || {}) });
-        setBlock(remote.block);
-        setSession(remote.session);
-        setStreak(remote.streak);
-        setLastDate(remote.lastDate);
-        setHistory(remote.history);
+        applyState({ ...remote, profile: profileToUse });
       }
       setSyncError(false);
     } catch (e) {
       // Distinct from "new account" — this is "couldn't reach your real data,"
-      // so the UI can say so instead of quietly looking like a wipe.
+      // so the UI can say so instead of quietly looking like a wipe. Whatever the
+      // cache (or prior in-memory state) already showed stays on screen as-is.
       setSyncError(true);
       console.warn("Could not load your saved data — staying on what's local.", e);
     }
@@ -140,37 +161,60 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isSupabaseConfigured) {
       setAuthLoading(false);
+      bootSettled.current = true;
       return;
     }
     let cancelled = false;
-    supabase.auth
-      .getSession()
-      .then(async ({ data }) => {
+    let bootUid: string | null = null;
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
         if (cancelled) return;
-        const uid = data.session?.user.id || null;
-        setUserId(uid);
+        bootUid = data.session?.user.id || null;
+        setUserId(bootUid);
         setUserEmail(data.session?.user.email || null);
-        if (uid) await hydrateFrom(uid);
-      })
-      .catch((e) => {
+        // Cache-first: apply whatever was last saved to disk for this account
+        // before the splash screen even hides, so a cold boot never shows a
+        // blank/default screen while the network fetch is still in flight.
+        if (bootUid) {
+          const cached = await loadCachedState(bootUid);
+          if (cached && !cancelled) {
+            applyState(cached);
+            setActive(cached.active);
+          }
+        }
+      } catch (e) {
         // Falls back to the sign-in screen rather than hanging on the splash forever.
         console.warn("Could not check for an existing session — showing sign-in:", e);
-      })
-      .finally(() => {
-        if (!cancelled) setAuthLoading(false);
-      });
+      } finally {
+        if (!cancelled) {
+          setAuthLoading(false);
+          bootSettled.current = true;
+        }
+      }
+      if (bootUid && !cancelled) refreshRemote(bootUid);
+    })();
     const { data: sub } = supabase.auth.onAuthStateChange((event, newSession: Session | null) => {
       const uid = newSession?.user.id || null;
       setUserId(uid);
       setUserEmail(newSession?.user.email || null);
       if (event === "SIGNED_OUT") resetLocal();
-      if (event === "SIGNED_IN" && uid) hydrateFrom(uid);
+      if (event === "SIGNED_IN" && uid) refreshRemote(uid);
     });
     return () => {
       cancelled = true;
       sub.subscription.unsubscribe();
     };
   }, []);
+
+  // Write-through: whatever's in memory for the signed-in account is mirrored to
+  // disk after every change, so the next cold boot's cache-first read is never
+  // more than one render behind. Skipped while signed out so a sign-out's reset
+  // to blank defaults can't clobber the real cached snapshot for that account.
+  useEffect(() => {
+    if (!userId || !bootSettled.current) return;
+    saveCachedState(userId, { profile, settings, block, session, streak, lastDate, history, active }).catch(() => {});
+  }, [userId, profile, settings, block, session, streak, lastDate, history, active]);
 
   // prototype's logSession(): push the entry once, bump streak/session/block position.
   const commitSession = (entry: HistoryEntry) => {
