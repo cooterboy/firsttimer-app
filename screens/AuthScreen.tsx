@@ -45,27 +45,42 @@ export default function AuthScreen() {
     if (!email.includes("@")) return setError("That email doesn't look right.");
     if (password.length < 8) return setError("8 characters or more.");
     setBusy(true);
-    const { error: err, needsEmailConfirm } = await appState.signUp(email.trim().toLowerCase(), password, name.trim(), units);
-    setBusy(false);
-    if (err) return setError(err);
-    if (needsEmailConfirm) setMode("checkEmail");
+    try {
+      const { error: err, needsEmailConfirm } = await appState.signUp(email.trim().toLowerCase(), password, name.trim(), units);
+      if (err) return setError(err);
+      if (needsEmailConfirm) setMode("checkEmail");
+    } catch (e) {
+      setError("Couldn't reach the server. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submitSignIn = async () => {
     setSiError("");
     setBusy(true);
-    const { error: err } = await appState.signIn(siEmail.trim().toLowerCase(), siPassword);
-    setBusy(false);
-    if (err) setSiError(err);
+    try {
+      const { error: err } = await appState.signIn(siEmail.trim().toLowerCase(), siPassword);
+      if (err) setSiError(err);
+    } catch (e) {
+      setSiError("Couldn't reach the server. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submitReset = async () => {
     if (!siEmail.includes("@")) return setSiError("Enter your email above first.");
     setBusy(true);
-    const { error: err } = await appState.resetPassword(siEmail.trim().toLowerCase());
-    setBusy(false);
-    if (err) setSiError(err);
-    else setResetSent(true);
+    try {
+      const { error: err } = await appState.resetPassword(siEmail.trim().toLowerCase());
+      if (err) setSiError(err);
+      else setResetSent(true);
+    } catch (e) {
+      setSiError("Couldn't reach the server. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (

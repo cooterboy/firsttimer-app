@@ -46,6 +46,7 @@ type AppState = {
   userId: string | null;
   userEmail: string | null;
   authLoading: boolean;
+  syncError: boolean;
 };
 
 type AppStateContextValue = AppState & {
@@ -78,6 +79,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [syncError, setSyncError] = useState(false);
 
   // Read fresh in async callbacks without re-subscribing effects on every change.
   const latest = useRef({ profile, block, session, streak, lastDate });
@@ -97,6 +99,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setStreak(0);
     setLastDate(null);
     setActive(null);
+    setSyncError(false);
   };
 
   const hydrateFrom = async (uid: string) => {
@@ -124,7 +127,11 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         setLastDate(remote.lastDate);
         setHistory(remote.history);
       }
+      setSyncError(false);
     } catch (e) {
+      // Distinct from "new account" — this is "couldn't reach your real data,"
+      // so the UI can say so instead of quietly looking like a wipe.
+      setSyncError(true);
       console.warn("Could not load your saved data — staying on what's local.", e);
     }
   };
@@ -135,14 +142,22 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     let cancelled = false;
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (cancelled) return;
-      const uid = data.session?.user.id || null;
-      setUserId(uid);
-      setUserEmail(data.session?.user.email || null);
-      if (uid) await hydrateFrom(uid);
-      setAuthLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(async ({ data }) => {
+        if (cancelled) return;
+        const uid = data.session?.user.id || null;
+        setUserId(uid);
+        setUserEmail(data.session?.user.email || null);
+        if (uid) await hydrateFrom(uid);
+      })
+      .catch((e) => {
+        // Falls back to the sign-in screen rather than hanging on the splash forever.
+        console.warn("Could not check for an existing session — showing sign-in:", e);
+      })
+      .finally(() => {
+        if (!cancelled) setAuthLoading(false);
+      });
     const { data: sub } = supabase.auth.onAuthStateChange((event, newSession: Session | null) => {
       const uid = newSession?.user.id || null;
       setUserId(uid);
@@ -314,6 +329,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       userId,
       userEmail,
       authLoading,
+      syncError,
       setActive,
       commitSession,
       advanceBlock,
@@ -328,7 +344,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       setUnits,
       updateSettings,
     }),
-    [profile, settings, block, session, history, streak, lastDate, active, userId, userEmail, authLoading]
+    [profile, settings, block, session, history, streak, lastDate, active, userId, userEmail, authLoading, syncError]
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

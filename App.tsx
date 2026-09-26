@@ -31,17 +31,20 @@ function MainApp() {
 function Root() {
   const { scheme, colors } = useTheme();
   const appState = useAppState();
-  const [fontsLoaded] = useAppFonts();
+  const [fontsLoaded, fontError] = useAppFonts();
+  // A font failing to load shouldn't hang the app on the splash screen forever —
+  // fall back to the system font rather than block indefinitely.
+  const fontsReady = fontsLoaded || !!fontError;
 
   const hideSplash = useCallback(async () => {
-    if (fontsLoaded && !appState.authLoading) await SplashScreen.hideAsync();
-  }, [fontsLoaded, appState.authLoading]);
+    if (fontsReady && !appState.authLoading) await SplashScreen.hideAsync();
+  }, [fontsReady, appState.authLoading]);
 
   useEffect(() => {
     hideSplash();
   }, [hideSplash]);
 
-  if (!fontsLoaded || appState.authLoading) return null;
+  if (!fontsReady || appState.authLoading) return null;
 
   if (!isSupabaseConfigured) {
     return (

@@ -55,6 +55,15 @@ export default function TodayScreen() {
           </Text>
         </View>
 
+        {appState.syncError ? (
+          <View style={[styles.syncBanner, { backgroundColor: colors.warnSoft }]}>
+            <Text style={{ color: colors.ink, fontSize: 13, lineHeight: 19 }}>
+              <Text style={{ fontFamily: fonts.bodyBold }}>Couldn't reach your saved data.</Text> Showing what's on this
+              phone — check your connection and reopen the app to sync the rest.
+            </Text>
+          </View>
+        ) : null}
+
         <WeekStrip dow={dow} colors={colors} history={appState.history} />
 
         {trainedToday && !resume ? (
@@ -337,6 +346,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   greet: { marginBottom: spacing.md },
+  syncBanner: { padding: 13, borderRadius: 12, marginBottom: spacing.md },
   date: { fontSize: type.eyebrow, letterSpacing: 1 },
   greetTitle: { fontSize: type.displayPageTitle, marginTop: 2, letterSpacing: 0.5 },
   weekCard: { padding: 14, marginBottom: spacing.md },
