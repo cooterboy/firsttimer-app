@@ -212,8 +212,8 @@ function WeekStrip({
                   styles.weekCircle,
                   { borderColor: isPlan ? colors.accent : colors.line, borderStyle: isPlan ? "dashed" : "solid" },
                   isDone && { backgroundColor: colors.good, borderColor: colors.good },
-                  isMob && { backgroundColor: colors.accent, borderColor: colors.accent },
-                  isWalk && { backgroundColor: colors.sunken, borderColor: colors.muted },
+                  isMob && { backgroundColor: colors.goodSoft, borderColor: colors.goodSoft },
+                  isWalk && { backgroundColor: colors.sunken, borderColor: colors.line },
                   isToday && { borderColor: colors.accent, borderWidth: 2 },
                 ]}
               >
@@ -222,8 +222,8 @@ function WeekStrip({
                     styles.weekNum,
                     { color: isPlan ? colors.ink : colors.muted, fontFamily: fonts.bodyBold },
                     isDone && { color: "#fff" },
-                    isMob && { color: colors.accentInk },
-                    isWalk && { color: colors.ink },
+                    isMob && { color: colors.good },
+                    isWalk && { color: colors.ink2 },
                   ]}
                 >
                   {isDone ? "✓" : isMob ? "M" : isWalk ? "W" : d.getDate()}

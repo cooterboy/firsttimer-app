@@ -16,7 +16,7 @@ import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import { ActiveMove, ActiveWorkout, HistoryEntry, SheetState } from "../lib/types";
-import { BLOCK_SESSIONS, MovementVariant, daysPer, step as stepFor, unit as unitFor } from "../lib/gymProgram";
+import { BLOCK_SESSIONS, MovementVariant, daysPer, specFor, step as stepFor, unit as unitFor } from "../lib/gymProgram";
 import {
   buildSessionForProfile,
   coachRead,
@@ -221,7 +221,10 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
       if (isWarmup(m)) return m;
       const sets = Math.max(1, m.sets - 1);
       const done = m.done.filter((x) => x < sets);
-      return { ...m, sets, done };
+      // Recompute the displayed "3 × 10" label for the new set count — matches how
+      // a swap already does this; short-on-time was leaving the old count on screen.
+      const spec = specFor(m, sets, wo.block, profile.reps);
+      return { ...m, sets, done, spec };
     });
     updateWo({ ...wo, moves, dropSet: true });
     setSheet(null);

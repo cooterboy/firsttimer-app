@@ -243,6 +243,11 @@ function repStyle(reps: RepStyleKey) {
   return REP_STYLES[reps] || REP_STYLES.balanced;
 }
 
+// prototype's repStyle().rest: Heavier rests longer, Lighter rests shorter.
+export function restMultiplier(reps: RepStyleKey): number {
+  return repStyle(reps).rest;
+}
+
 // prototype's setsFor(): how many sets a given week runs
 export function setsFor(block: number, week: number, lengthMin: number): number {
   const setTarget = lengthMin <= 30 ? 2 : lengthMin >= 60 ? 4 : 3;
