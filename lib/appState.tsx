@@ -9,11 +9,12 @@ import {
   pushSession,
   pushSettings,
   pushWalk,
+  pushWeighIn,
   resetTestData as resetTestDataRemote,
 } from "./sync";
 import { loadCachedState, saveCachedState, type CachedState } from "./localCache";
 import { convertHistoryUnits, convertProfileWeight, devSeedNearBlockEnd } from "./sessionEngine";
-import { ActiveWorkout, HistoryEntry, MobilityEntry, Profile, Settings, WalkEntry } from "./types";
+import { ActiveWorkout, HistoryEntry, MobilityEntry, Profile, Settings, WalkEntry, WeighIn } from "./types";
 
 // In-memory app state, mirroring the shape of the prototype's `state` object
 // (profile, settings, block/session position, history, streak, in-progress workout),
@@ -53,6 +54,7 @@ type AppState = {
   history: HistoryEntry[];
   mobility: MobilityEntry[];
   walks: WalkEntry[];
+  weighins: WeighIn[];
   streak: number;
   lastDate: string | null;
   active: ActiveWorkout | null;
@@ -69,6 +71,7 @@ type AppStateContextValue = AppState & {
   commitMobility: (entry: MobilityEntry) => void;
   commitWalk: (entry: WalkEntry) => void;
   updateWalkEntry: (id: string, patch: Partial<WalkEntry>) => void;
+  commitWeighIn: (entry: WeighIn) => void;
   advanceBlock: () => void;
   restartBlockPosition: () => void;
   updateHistoryEntry: (block: number, idx: number, patch: Partial<HistoryEntry>) => void;
@@ -94,6 +97,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [mobility, setMobility] = useState<MobilityEntry[]>([]);
   const [walks, setWalks] = useState<WalkEntry[]>([]);
+  const [weighins, setWeighins] = useState<WeighIn[]>([]);
   const [streak, setStreak] = useState(0);
   const [lastDate, setLastDate] = useState<string | null>(null);
   const [active, setActive] = useState<ActiveWorkout | null>(null);
@@ -126,6 +130,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setHistory([]);
     setMobility([]);
     setWalks([]);
+    setWeighins([]);
     setStreak(0);
     setLastDate(null);
     setActive(null);
@@ -147,6 +152,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setHistory(s.history);
     setMobility(s.mobility);
     setWalks(s.walks);
+    setWeighins(s.weighins);
   };
 
   // The actual network fetch + reconcile. Never awaited by the boot sequence — it
@@ -236,8 +242,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   // to blank defaults can't clobber the real cached snapshot for that account.
   useEffect(() => {
     if (!userId || !bootSettled.current) return;
-    saveCachedState(userId, { profile, settings, block, session, streak, lastDate, history, mobility, walks, active }).catch(() => {});
-  }, [userId, profile, settings, block, session, streak, lastDate, history, mobility, walks, active]);
+    saveCachedState(userId, { profile, settings, block, session, streak, lastDate, history, mobility, walks, weighins, active }).catch(() => {});
+  }, [userId, profile, settings, block, session, streak, lastDate, history, mobility, walks, weighins, active]);
 
   // prototype's logSession(): push the entry once, bump streak/session/block position.
   const commitSession = (entry: HistoryEntry) => {
@@ -309,6 +315,15 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         return next;
       })
     );
+  };
+
+  // prototype's weigh-in log handlers: pushes the entry, and — same as the
+  // prototype — keeps profile.weight in sync with the latest one, since the
+  // nutrition card's calorie estimate reads from profile.weight, not the log.
+  const commitWeighIn = (entry: WeighIn) => {
+    setWeighins((w) => [...w, entry]);
+    updateProfile({ weight: entry.w });
+    if (userId) pushWeighIn(userId, entry).catch((e) => console.warn("Weigh-in save failed, staying local:", e));
   };
 
   const advanceBlock = () => {
@@ -456,6 +471,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setHistory([]);
     setMobility([]);
     setWalks([]);
+    setWeighins([]);
     setBlock(1);
     setSession(0);
     setStreak(0);
@@ -483,6 +499,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       history,
       mobility,
       walks,
+      weighins,
       streak,
       lastDate,
       active,
@@ -496,6 +513,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       commitMobility,
       commitWalk,
       updateWalkEntry,
+      commitWeighIn,
       advanceBlock,
       restartBlockPosition,
       updateHistoryEntry,
@@ -518,6 +536,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       history,
       mobility,
       walks,
+      weighins,
       streak,
       lastDate,
       active,

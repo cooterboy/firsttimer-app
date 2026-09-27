@@ -1,28 +1,40 @@
 import React, { useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
-import Svg, { Line, Rect, Text as SvgText } from "react-native-svg";
+import * as Haptics from "expo-haptics";
+import Svg, { Circle, Line, Polyline, Rect, Text as SvgText } from "react-native-svg";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing, type } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import { BLOCK_SESSIONS, daysPer, unit, weekOf, weeksPerBlock } from "../lib/gymProgram";
-import { fmtDate, historyMovedTotal, movedLabel, setsSummary } from "../lib/sessionEngine";
+import {
+  fmtDate,
+  historyMovedTotal,
+  liftDeltas,
+  movedLabel,
+  newWeighIn,
+  setsSummary,
+  weeklyWeights,
+  weighedThisWeek,
+} from "../lib/sessionEngine";
 import { walkKindLabel } from "../lib/walkProgram";
-import { HistoryEntry } from "../lib/types";
+import { HistoryEntry, WeighIn } from "../lib/types";
 import AppHeader from "../components/AppHeader";
 import Card from "../components/Card";
 import SessionDetailSheet from "../components/SessionDetailSheet";
+import MovementDetailSheet from "../components/MovementDetailSheet";
 
 export default function ProgressScreen() {
   const { colors } = useTheme();
   const appState = useAppState();
   const navigation = useNavigation<any>();
   const tabBarHeight = useBottomTabBarHeight();
-  const { history, mobility, walks, streak, block, session, profile } = appState;
+  const { history, mobility, walks, weighins, streak, block, session, profile } = appState;
   const [openKey, setOpenKey] = useState<{ block: number; idx: number } | null>(null);
   const openEntry = openKey ? history.find((h) => h.block === openKey.block && h.idx === openKey.idx) || null : null;
+  const [openLift, setOpenLift] = useState<string | null>(null);
   const hasAnything = history.length > 0 || mobility.length > 0 || walks.length > 0;
 
   return (
@@ -40,6 +52,8 @@ export default function ProgressScreen() {
           <>
             <Overview colors={colors} history={history} streak={streak} units={profile.units} />
             <WeekChart colors={colors} history={history} />
+            <Lifts colors={colors} history={history} units={profile.units} onOpen={setOpenLift} />
+            <Body colors={colors} weighins={weighins} units={profile.units} onLog={appState.commitWeighIn} />
             <Blocks colors={colors} block={block} session={session} history={history} />
             <History
               colors={colors}
@@ -54,6 +68,7 @@ export default function ProgressScreen() {
         )}
       </ScrollView>
       <SessionDetailSheet entry={openEntry} units={profile.units} history={history} onClose={() => setOpenKey(null)} />
+      <MovementDetailSheet name={openLift} history={history} units={profile.units} onClose={() => setOpenLift(null)} />
     </SafeAreaView>
   );
 }
@@ -180,6 +195,163 @@ function WeekChart({ colors, history }: { colors: ReturnType<typeof useTheme>["c
       <Text style={[styles.note, { color: colors.muted, marginTop: 6 }]}>
         Target is {daysPer()} a week. A missed week just means the next session is waiting.
       </Text>
+    </Card>
+  );
+}
+
+function Lifts({
+  colors,
+  history,
+  units,
+  onOpen,
+}: {
+  colors: ReturnType<typeof useTheme>["colors"];
+  history: ReturnType<typeof useAppState>["history"];
+  units: "imperial" | "metric";
+  onOpen: (name: string) => void;
+}) {
+  const d = liftDeltas(history);
+  const names = Object.keys(d);
+  const u = unit(units);
+  const maxCount = names.length ? Math.max(...names.map((n) => d[n].count)) : 0;
+
+  return (
+    <Card style={{ marginTop: spacing.md }}>
+      <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display }]}>Week 1 vs now</Text>
+      {!names.length ? (
+        <Text style={[styles.note, { color: colors.muted }]}>
+          Log a weight in session 1 and it shows up here. From session 4 on, the change shows next to it.
+        </Text>
+      ) : (
+        <>
+          {names.map((n, i) => {
+            const x = d[n];
+            const pct = x.first ? Math.round(((x.last - x.first) / x.first) * 100) : 0;
+            return (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                key={n}
+                onPress={() => onOpen(n)}
+                style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.rowK, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>{n}</Text>
+                  <Text style={[styles.rowSub, { color: colors.muted }]}>
+                    {x.count} session{x.count === 1 ? "" : "s"} logged
+                  </Text>
+                </View>
+                <Text style={{ color: colors.ink, fontFamily: fonts.monoBold, fontSize: 13 }}>
+                  {x.first} → {x.last} {u}
+                  {x.delta > 0 ? <Text style={{ color: colors.good }}> +{pct}%</Text> : null} ›
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+          <Text style={[styles.note, { color: colors.muted, marginTop: 8 }]}>
+            {maxCount < 2
+              ? "A movement needs two sessions before it can draw a line, and each one comes round every third session."
+              : "Each line is that movement's heaviest set over time. Tap one for the full history."}
+          </Text>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function Body({
+  colors,
+  weighins,
+  units,
+  onLog,
+}: {
+  colors: ReturnType<typeof useTheme>["colors"];
+  weighins: ReturnType<typeof useAppState>["weighins"];
+  units: "imperial" | "metric";
+  onLog: (entry: WeighIn) => void;
+}) {
+  const [input, setInput] = useState("");
+  const u = unit(units);
+  const wi = weeklyWeights(weighins);
+  const alreadyThisWeek = weighedThisWeek(weighins);
+
+  const submit = () => {
+    const v = Number(input);
+    if (!(v > 0)) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    onLog(newWeighIn(v));
+    setInput("");
+    Alert.alert("Logged.");
+  };
+
+  const W = 340,
+    H = 120,
+    pad = 22;
+  let chart: React.ReactNode = null;
+  let trendNote = "";
+  if (wi.length >= 2) {
+    const ws = wi.map((x) => x.w);
+    const lo = Math.min(...ws);
+    const hi = Math.max(...ws);
+    const span = hi - lo || 1;
+    const pts = wi.map((x, i) => [pad + i * ((W - pad * 2) / Math.max(1, wi.length - 1)), H - 24 - ((x.w - lo) / span) * (H - 44)]);
+    chart = (
+      <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`}>
+        <Polyline points={pts.map((p) => p.join(",")).join(" ")} stroke={colors.accent} strokeWidth={2} fill="none" />
+        {pts.map((p, i) => (
+          <Circle key={i} cx={p[0]} cy={p[1]} r={3.5} fill={colors.accent} />
+        ))}
+        <SvgText x={pad} y={H - 6} fontSize={9} fill={colors.muted}>
+          {fmtDate(wi[0].date)} · {wi[0].w}
+        </SvgText>
+        <SvgText x={W - pad} y={H - 6} fontSize={9} fill={colors.muted} textAnchor="end">
+          {fmtDate(wi[wi.length - 1].date)} · {wi[wi.length - 1].w}
+        </SvgText>
+      </Svg>
+    );
+    const chg = Math.round((wi[wi.length - 1].w - wi[0].w) * 10) / 10;
+    trendNote = `One point per week, the latest weigh-in that week. ${chg === 0 ? "No change yet." : `${chg > 0 ? "+" : ""}${chg} ${u} since your first week.`}`;
+  } else if (wi.length === 1) {
+    trendNote = `Starting point: ${wi[0].w} ${u} on ${fmtDate(wi[0].date)}. The line starts with next week's weigh-in.`;
+  } else {
+    trendNote = "Optional. Only you see it. The app asks once a week on your first training day.";
+  }
+
+  return (
+    <Card style={{ marginTop: spacing.md }}>
+      <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display }]}>Body weight by week</Text>
+      {chart}
+      <Text style={[styles.note, { color: colors.muted, marginTop: chart ? 6 : 0, marginBottom: 10 }]}>{trendNote}</Text>
+      <View style={styles.weighRow}>
+        <TextInput
+          value={input}
+          onChangeText={setInput}
+          keyboardType="decimal-pad"
+          placeholder={u}
+          placeholderTextColor={colors.muted}
+          style={[styles.weighInput, { color: colors.ink, backgroundColor: colors.sunken }]}
+        />
+        <TouchableOpacity activeOpacity={0.7} style={[styles.weighBtn, { borderColor: colors.line }]} onPress={submit}>
+          <Text style={{ color: colors.ink, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>
+            {alreadyThisWeek ? "Update this week" : "Log weigh-in"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+      {weighins.length ? (
+        <View style={{ marginTop: spacing.md }}>
+          <Text style={[styles.eyebrowSmall, { color: colors.muted }]}>WEIGH-INS</Text>
+          {weighins
+            .slice()
+            .reverse()
+            .map((w, i) => (
+              <View key={w.id} style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}>
+                <Text style={[styles.rowK, { color: colors.ink }]}>{fmtDate(w.date)}</Text>
+                <Text style={{ color: colors.ink, fontFamily: fonts.monoBold, fontSize: 13 }}>
+                  {w.w} {u}
+                </Text>
+              </View>
+            ))}
+        </View>
+      ) : null}
     </Card>
   );
 }
@@ -362,4 +534,8 @@ const styles = StyleSheet.create({
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
   tagBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   ghostBtn: { borderWidth: 1, borderRadius: 13, padding: 13, alignItems: "center", marginTop: 16 },
+  weighRow: { flexDirection: "row", gap: 8 },
+  weighInput: { width: 100, padding: 12, borderRadius: 10, fontSize: 14 },
+  weighBtn: { flex: 1, borderWidth: 1, borderRadius: 10, padding: 12, alignItems: "center" },
+  eyebrowSmall: { fontSize: 11, textTransform: "uppercase", letterSpacing: 1, fontWeight: "700", marginBottom: 4 },
 });

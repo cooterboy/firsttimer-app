@@ -92,6 +92,21 @@ create policy "walks are self-owned" on walks
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+create table if not exists weighins (
+  id uuid primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  date timestamptz not null,
+  w numeric not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table weighins enable row level security;
+
+create policy "weighins are self-owned" on weighins
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
 -- Auto-create a blank profile row the moment someone signs up, so the app never has
 -- to handle "signed in but no profile row yet".
 create or replace function handle_new_user()

@@ -68,6 +68,15 @@ export type WalkEntry = {
   hurt: string[];
 };
 
+// A weekly body-weight log (prototype's state.weighins). Always stored in the
+// profile's current units — convertProfileWeight-style conversion applies the
+// same way session history weights do when units are switched.
+export type WeighIn = {
+  id: string;
+  date: string; // ISO
+  w: number;
+};
+
 // One movement's logged result inside a completed session (prototype's h.moves[name]).
 export type HistoryMove = {
   w: string;

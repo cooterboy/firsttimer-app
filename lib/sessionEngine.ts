@@ -16,7 +16,7 @@ import {
   unit,
 } from "./gymProgram";
 import * as Crypto from "expo-crypto";
-import { ActiveMove, ActiveWorkout, HistoryEntry, HistoryMove, MobilityEntry, Profile, Settings, WalkEntry, WalkKind } from "./types";
+import { ActiveMove, ActiveWorkout, HistoryEntry, HistoryMove, MobilityEntry, Profile, Settings, WalkEntry, WalkKind, WeighIn } from "./types";
 import { walkKindLabel } from "./walkProgram";
 
 export const MOVE_TAGS = ["Form felt off", "Joint ache", "Machine confusing", "Grip gave out", "Felt great"];
@@ -485,6 +485,54 @@ export function liftDeltas(history: HistoryEntry[]): Record<string, { first: num
   return out;
 }
 
+// Every logged instance of one movement, in order — the source for both the Lifts
+// list and the per-movement detail screen (prototype's liftSeries()).
+export type LiftPoint = {
+  date: string;
+  block: number;
+  idx: number;
+  week: number;
+  top: number; // heaviest set that session
+  vol: number; // sets × reps × weight, added up
+  sets: number;
+  reps: number;
+  feel: string;
+  note: string;
+  mtags: string[];
+};
+export function liftSeries(name: string, history: HistoryEntry[]): LiftPoint[] {
+  const out: LiftPoint[] = [];
+  history.forEach((h) => {
+    const m = h.moves[name];
+    if (!m || m.type !== "weight") return;
+    const ws = (m.setW || []).map(Number).filter((v) => v > 0);
+    const top = ws.length ? Math.max(...ws) : Number(m.w) || 0;
+    if (!top) return;
+    const reps = m.reps || 0;
+    const sets = m.sets || ws.length || 0;
+    const vol = ws.length ? ws.reduce((a, v) => a + v * reps, 0) : top * reps * sets;
+    out.push({ date: h.date, block: h.block, idx: h.idx, week: h.week, top, vol, sets, reps, feel: m.feel || "", note: m.note || "", mtags: m.mtags || [] });
+  });
+  return out;
+}
+
+// ---- body weight (prototype's weighedThisWeek/weeklyWeights) ----
+export function weighedThisWeek(weighins: WeighIn[]): boolean {
+  const k = weekKey(new Date());
+  return weighins.some((w) => weekKey(w.date) === k);
+}
+// One point per week — the latest weigh-in logged that week — for the trend chart.
+export function weeklyWeights(weighins: WeighIn[]): WeighIn[] {
+  const map: Record<number, WeighIn> = {};
+  weighins.forEach((w) => {
+    map[weekKey(w.date)] = w;
+  });
+  return Object.keys(map)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map((k) => map[k]);
+}
+
 export type RetestSummary = {
   weeks: number;
   sessions: number;
@@ -755,6 +803,9 @@ export function mobilityToday(mobility: MobilityEntry[]): boolean {
 export function newMobilityEntry(minutes: number): MobilityEntry {
   return { id: Crypto.randomUUID(), date: new Date().toISOString(), minutes };
 }
+export function newWeighIn(w: number): WeighIn {
+  return { id: Crypto.randomUUID(), date: new Date().toISOString(), w };
+}
 // prototype's finishMob(): what gets said depends on whether they also lifted today,
 // whether it's their first ever, and round-number milestones every four blocks.
 export function mobilityFinishCopy(
@@ -836,7 +887,8 @@ export function historyCsv(
   history: HistoryEntry[],
   units: Profile["units"],
   mobility: MobilityEntry[] = [],
-  walks: WalkEntry[] = []
+  walks: WalkEntry[] = [],
+  weighins: WeighIn[] = []
 ): string {
   const q = (v: unknown) => `"${String(v === undefined || v === null ? "" : v).replace(/"/g, '""')}"`;
   const u = unit(units);
@@ -914,6 +966,9 @@ export function historyCsv(
       "",
     ]);
   });
+  weighins.forEach((w) => {
+    rows.push([w.date, "", "", "", "", "", "", "", "", "Weigh-in", "bodyweight", "", "", w.w, "", "", "", ""]);
+  });
   return rows.map((r) => r.map(q).join(",")).join("\r\n");
 }
 
@@ -928,6 +983,7 @@ export type ExportSnapshot = {
   history: HistoryEntry[];
   mobility: MobilityEntry[];
   walks: WalkEntry[];
+  weighins: WeighIn[];
 };
 
 export function historyJson(snapshot: Omit<ExportSnapshot, "exportedAt">): string {
