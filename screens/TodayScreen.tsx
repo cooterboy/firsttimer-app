@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useTheme } from "../lib/ThemeContext";
@@ -7,7 +7,11 @@ import { fonts, radius, spacing, type } from "../lib/theme";
 import { firstDayGym, unit } from "../lib/gymProgram";
 import {
   buildSessionForProfile,
+  comebackWeight,
+  daysAway,
+  isComeback,
   lastFor,
+  liftDeltas,
   mobilityDue,
   mobilityToday,
   nextTrainingDay,
@@ -50,8 +54,20 @@ export default function TodayScreen() {
   const resume = !!appState.active && appState.active.block === appState.block && appState.active.idx === appState.session;
   const built = buildSessionForProfile(appState.block, appState.session, appState.profile);
   const isPlanDay = planDays().includes(dow);
+  // Once any of the three comeback choices has been made, pendingComebackFactor is
+  // set (immediately for two of them, ahead of time for "restart the block") — the
+  // card shouldn't show again after that, even though isComeback() itself stays true
+  // until an actual session logs and moves lastDate. Mirrors the prototype's
+  // `isComeback() && !resume && !state.comeback` gate exactly.
+  const comebackActive =
+    !resume && workoutModal.pendingComebackFactor == null && isComeback(appState.history, appState.lastDate);
   const mobDayActive =
-    !isPlanDay && !trainedToday && mobilityDue(appState.mobility, appState.settings.mobility) && !resume && done > 0;
+    !comebackActive &&
+    !isPlanDay &&
+    !trainedToday &&
+    mobilityDue(appState.mobility, appState.settings.mobility) &&
+    !resume &&
+    done > 0;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
@@ -80,7 +96,9 @@ export default function TodayScreen() {
 
         <WeekStrip dow={dow} colors={colors} history={appState.history} mobility={appState.mobility} walks={appState.walks} />
 
-        {mobDayActive ? (
+        {comebackActive ? (
+          <ComebackCard colors={colors} history={appState.history} lastDate={appState.lastDate} units={appState.profile.units} session={appState.session} />
+        ) : mobDayActive ? (
           <MobilityDayCard colors={colors} nextName={nextTrainingDay().name} />
         ) : trainedToday && !resume ? (
           <DoneForTodayCard
@@ -96,22 +114,28 @@ export default function TodayScreen() {
 
         <TouchableOpacity
           activeOpacity={0.85}
-          disabled={trainedToday && !resume}
+          disabled={!comebackActive && trainedToday && !resume}
           style={[
             styles.startBtn,
             { backgroundColor: colors.accent },
-            trainedToday && !resume && { backgroundColor: colors.sunken },
+            !comebackActive && trainedToday && !resume && { backgroundColor: colors.sunken },
           ]}
-          onPress={mobDayActive ? workoutModal.openMobility : workoutModal.open}
+          onPress={() => {
+            if (comebackActive) workoutModal.open(0.85);
+            else if (mobDayActive) workoutModal.openMobility();
+            else workoutModal.open();
+          }}
         >
           <Text
             style={[
               styles.startBtnText,
               { color: colors.accentInk, fontFamily: fonts.display },
-              trainedToday && !resume && { color: colors.muted },
+              !comebackActive && trainedToday && !resume && { color: colors.muted },
             ]}
           >
-            {mobDayActive
+            {comebackActive
+              ? "Ease back in"
+              : mobDayActive
               ? "Start mobility"
               : trainedToday && !resume
               ? `See you ${nextTrainingDay().name}`
@@ -123,7 +147,64 @@ export default function TodayScreen() {
           </Text>
         </TouchableOpacity>
 
-        {mobDayActive ? (
+        {comebackActive ? (
+          <Card style={{ marginTop: spacing.md, padding: 0, overflow: "hidden" }}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={styles.infoRow}
+              onPress={() => workoutModal.open(1)}
+            >
+              <View style={styles.moveText}>
+                <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>
+                  Pick up at my old weights
+                </Text>
+                <Text style={[styles.moveCue, { color: colors.muted }]}>
+                  If you kept training elsewhere, or you just feel ready.
+                </Text>
+              </View>
+              <Text style={{ color: colors.muted, fontSize: 18 }}>›</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={[styles.infoRow, { borderTopWidth: 1, borderTopColor: colors.line }]}
+              onPress={() => {
+                Alert.alert(
+                  "Start the block over?",
+                  "Session 1 again, same movements. Everything you already logged stays in your history and on your charts.",
+                  [
+                    { text: "Not that", style: "cancel" },
+                    {
+                      text: "Start from session 1",
+                      onPress: () => {
+                        appState.restartBlockPosition();
+                        workoutModal.setPendingComeback(0.85);
+                      },
+                    },
+                  ]
+                );
+              }}
+            >
+              <View style={styles.moveText}>
+                <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>
+                  Start the block over
+                </Text>
+                <Text style={[styles.moveCue, { color: colors.muted }]}>Back to session 1. Your history stays.</Text>
+              </View>
+              <Text style={{ color: colors.muted, fontSize: 18 }}>›</Text>
+            </TouchableOpacity>
+          </Card>
+        ) : null}
+        {comebackActive ? (
+          <Card style={{ marginTop: spacing.md }}>
+            <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>No streak to rebuild</Text>
+            <Text style={[styles.moveCue, { color: colors.muted, marginTop: 2 }]}>
+              There's no penalty here and nothing expired. {done} session{done === 1 ? "" : "s"} logged is still {done}{" "}
+              session{done === 1 ? "" : "s"} logged.
+            </Text>
+          </Card>
+        ) : null}
+
+        {comebackActive ? null : mobDayActive ? (
           <>
             <WalkCard colors={colors} walks={appState.walks} onPress={workoutModal.openWalk} />
             <Card style={{ marginTop: spacing.md }}>
@@ -158,7 +239,7 @@ export default function TodayScreen() {
           </>
         )}
 
-        {done === 0 ? <BeforeFirstOne colors={colors} /> : null}
+        {done === 0 && !comebackActive ? <BeforeFirstOne colors={colors} /> : null}
         <InfoRows colors={colors} />
       </ScrollView>
     </SafeAreaView>
@@ -356,6 +437,85 @@ function SessionCard({
           );
         })}
       </View>
+    </Card>
+  );
+}
+
+function ComebackCard({
+  colors,
+  history,
+  lastDate,
+  units,
+  session,
+}: {
+  colors: ReturnType<typeof useTheme>["colors"];
+  history: ReturnType<typeof useAppState>["history"];
+  lastDate: string | null;
+  units: "imperial" | "metric";
+  session: number;
+}) {
+  const away = daysAway(lastDate);
+  const weeks = Math.floor(away / 7);
+  const awayTxt = weeks >= 1 ? `${weeks} week${weeks > 1 ? "s" : ""}` : `${away} days`;
+  const deltas = liftDeltas(history);
+  const top = Object.keys(deltas)
+    .sort((a, b) => deltas[b].last - deltas[a].last)
+    .slice(0, 3)
+    .map((n) => ({ n, w: deltas[n].last }));
+  const u = unit(units);
+
+  return (
+    <Card style={styles.sessionCard}>
+      <View style={[styles.sessionTop, { backgroundColor: colors.ink }]}>
+        <View style={styles.sessionRowTop}>
+          <View style={[styles.badge, { backgroundColor: "rgba(255,255,255,.18)" }]}>
+            <Text style={[styles.badgeText, { color: "#fff", fontFamily: fonts.bodyBold }]}>Welcome back</Text>
+          </View>
+          <Text style={[styles.sessionWeek, { color: "#fff", fontFamily: fonts.bodyBold }]}>{awayTxt} away</Text>
+        </View>
+        <Text style={[styles.sessionTitle, { color: "#fff", fontFamily: fonts.display }]}>Still here.</Text>
+        <Text style={[styles.sessionSub, { color: "#fff" }]}>
+          {away >= 21
+            ? "However long it's been, the way back in is one session. Nothing reset while you were gone."
+            : "Nothing reset. Your numbers are exactly where you left them."}
+        </Text>
+      </View>
+      <View style={styles.moveList}>
+        {top.length ? (
+          top.map((t, i) => (
+            <View key={t.n} style={[styles.moveRow, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}>
+              <View style={[styles.thumb, { backgroundColor: colors.sunken }]}>
+                <Text style={{ color: colors.muted }}>▶</Text>
+              </View>
+              <View style={styles.moveText}>
+                <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>{t.n}</Text>
+                <Text style={[styles.moveCue, { color: colors.muted }]}>
+                  You were at {t.w} {u}
+                </Text>
+              </View>
+              <Text style={[styles.moveSpec, { color: colors.ink2, fontFamily: fonts.monoBold }]}>
+                {comebackWeight(t.w, units)} {u}
+              </Text>
+            </View>
+          ))
+        ) : (
+          <View style={styles.moveRow}>
+            <View style={[styles.thumb, { backgroundColor: colors.sunken }]}>
+              <Text style={{ color: colors.muted }}>▶</Text>
+            </View>
+            <View style={styles.moveText}>
+              <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Session {session + 1}</Text>
+              <Text style={[styles.moveCue, { color: colors.muted }]}>Right where you left off</Text>
+            </View>
+          </View>
+        )}
+      </View>
+      {top.length ? (
+        <Text style={[styles.note, { color: colors.muted, paddingHorizontal: 18, paddingBottom: 16 }]}>
+          The right column is where we'd start you back: about 15% lighter for one session, then straight back up.
+          Strength comes back much faster than it built.
+        </Text>
+      ) : null}
     </Card>
   );
 }

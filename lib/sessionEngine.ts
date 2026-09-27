@@ -110,8 +110,17 @@ const warmupMovement = (profile: Profile): ActiveMove => ({
 
 // prototype's openWorkout(): the bump/hold logic that decides each movement's
 // starting weights from history, plus the warm-up movement stitched to the front.
-export function prepareWorkoutMoves(built: BuiltSession, profile: Profile, settings: Settings, history: HistoryEntry[]): ActiveMove[] {
+export function prepareWorkoutMoves(
+  built: BuiltSession,
+  profile: Profile,
+  settings: Settings,
+  history: HistoryEntry[],
+  comebackFactor?: number
+): ActiveMove[] {
   const st = step(profile.units);
+  // Only actually eases weights when <1 — "pick up at my old weights" passes a
+  // factor of 1, which intentionally applies no easing at all.
+  const cb = comebackFactor && comebackFactor < 1 ? comebackFactor : 0;
   const moves: ActiveMove[] = built.moves.map((m) => {
     const last = lastFor(m.n, history);
     const hist2 = history
@@ -136,8 +145,12 @@ export function prepareWorkoutMoves(built: BuiltSession, profile: Profile, setti
     for (let i = 0; i < m.sets; i++) {
       let v = last ? (last.setW && last.setW[i]) || last.w || "" : "";
       if (v && bump) v = String(Number(v) + bump);
+      if (v && cb) v = String(Math.max(st, Math.round((Number(v) * cb) / st) * st));
       setW.push(v);
     }
+    // Overwrites any hold set above — being back after a while outranks the usual
+    // "held because it felt hard" style notes.
+    if (cb && last && last.w) hold = `Eased back ${Math.round((1 - cb) * 100)}% from ${last.w} ${unit(profile.units)}. Go up next session.`;
     return {
       n: m.n,
       cue: m.cue,
@@ -162,16 +175,23 @@ export function prepareWorkoutMoves(built: BuiltSession, profile: Profile, setti
   return moves;
 }
 
-export function newActiveWorkout(built: BuiltSession, profile: Profile, settings: Settings, history: HistoryEntry[]): ActiveWorkout {
+export function newActiveWorkout(
+  built: BuiltSession,
+  profile: Profile,
+  settings: Settings,
+  history: HistoryEntry[],
+  comebackFactor?: number
+): ActiveWorkout {
   return {
     block: built.block,
     idx: built.idx,
     letter: built.letter,
     week: built.week,
     mi: 0,
-    moves: prepareWorkoutMoves(built, profile, settings, history),
+    moves: prepareWorkoutMoves(built, profile, settings, history, comebackFactor),
     activeMs: 0,
     segStart: Date.now(),
+    comeback: comebackFactor != null ? { factor: comebackFactor } : null,
   };
 }
 
@@ -226,7 +246,15 @@ export function applySwap(m: ActiveMove, alt: MovementVariant, label: string, bl
 }
 
 // ---- per-set and per-movement feedback ----
-export function setFeedback(m: ActiveMove, i: number, block: number, idx: number, history: HistoryEntry[], profile: Profile): { kind: "up" | "down" | "same"; text: string } | null {
+export function setFeedback(
+  m: ActiveMove,
+  i: number,
+  block: number,
+  idx: number,
+  history: HistoryEntry[],
+  profile: Profile,
+  isComebackSession = false
+): { kind: "up" | "down" | "same"; text: string } | null {
   if (m.type !== "weight") return null;
   const now = Number(m.setW[i]) || 0;
   if (!now) return null;
@@ -246,6 +274,8 @@ export function setFeedback(m: ActiveMove, i: number, block: number, idx: number
     };
   }
   if (d < 0) {
+    // Being lighter is the whole point of a comeback session — nothing to remark on.
+    if (isComebackSession) return null;
     const best = bestEver(m.n, history);
     return {
       kind: "down",
@@ -684,6 +714,20 @@ export function trainedToday(history: HistoryEntry[]): boolean {
     d.setHours(0, 0, 0, 0);
     return d.getTime() === k.getTime();
   });
+}
+
+// ---- comeback: "been a minute" (prototype's isComeback/daysAway) ----
+export const AWAY_DAYS = 10;
+export function daysAway(lastDate: string | null): number {
+  return lastDate ? Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000) : 0;
+}
+export function isComeback(history: HistoryEntry[], lastDate: string | null): boolean {
+  return history.length > 0 && daysAway(lastDate) >= AWAY_DAYS;
+}
+// prototype's `lighter(w)`: ~15% lighter for one session back, rounded to a step.
+export function comebackWeight(w: number, units: Profile["units"]): number {
+  const st = step(units);
+  return Math.max(st, Math.round((w * 0.85) / st) * st);
 }
 
 // ---- mobility day (prototype's mobilityDue/mobilityToday) ----

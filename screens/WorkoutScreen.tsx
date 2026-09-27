@@ -15,6 +15,7 @@ import * as Haptics from "expo-haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
+import { useWorkoutModal } from "../lib/workoutModal";
 import { ActiveMove, ActiveWorkout, HistoryEntry, SheetState } from "../lib/types";
 import { BLOCK_SESSIONS, MovementVariant, daysPer, specFor, step as stepFor, unit as unitFor } from "../lib/gymProgram";
 import {
@@ -49,6 +50,7 @@ const REST_FLOOR = __DEV__ ? 0 : 15;
 export default function WorkoutScreen({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { colors } = useTheme();
   const appState = useAppState();
+  const workoutModal = useWorkoutModal();
   const [wo, setWo] = useState<ActiveWorkout | null>(null);
   const [sheet, setSheet] = useState<SheetState>(null);
   const [rest, setRest] = useState<{ total: number; end: number } | null>(null);
@@ -65,9 +67,11 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
       setWo(appState.active);
     } else {
       const built = buildSessionForProfile(appState.block, appState.session, appState.profile);
-      const fresh = newActiveWorkout(built, appState.profile, appState.settings, appState.history);
+      const comebackFactor = workoutModal.pendingComebackFactor ?? undefined;
+      const fresh = newActiveWorkout(built, appState.profile, appState.settings, appState.history, comebackFactor);
       appState.setActive(fresh);
       setWo(fresh);
+      if (comebackFactor != null) workoutModal.clearPendingComeback();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
@@ -171,7 +175,7 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
     const done = [...move.done, i];
     const setW = move.setW.slice();
     if (move.type === "weight" && i + 1 < move.sets && !setW[i + 1]) setW[i + 1] = setW[i];
-    let fb = setFeedback(move, i, wo.block, wo.idx, appState.history, profile);
+    let fb = setFeedback(move, i, wo.block, wo.idx, appState.history, profile, !!wo.comeback);
     if (done.length >= move.sets) {
       const sum = moveSummary({ ...move, done, setW }, wo.block, wo.idx, appState.history);
       if (sum) fb = sum;

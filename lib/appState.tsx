@@ -70,6 +70,7 @@ type AppStateContextValue = AppState & {
   commitWalk: (entry: WalkEntry) => void;
   updateWalkEntry: (id: string, patch: Partial<WalkEntry>) => void;
   advanceBlock: () => void;
+  restartBlockPosition: () => void;
   updateHistoryEntry: (block: number, idx: number, patch: Partial<HistoryEntry>) => void;
   deleteHistoryEntry: (block: number, idx: number) => void;
   signUp: (email: string, password: string, name: string, units: Profile["units"]) => Promise<{ error: string | null; needsEmailConfirm: boolean }>;
@@ -324,6 +325,20 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Comeback card's "start the block over": same block, back to session 1. History
+  // stays exactly as-is — nothing here touches it, only the position pointer.
+  const restartBlockPosition = () => {
+    setSession(0);
+    if (userId) {
+      pushProfile(userId, latest.current.profile, {
+        block: latest.current.block,
+        session: 0,
+        streak: latest.current.streak,
+        lastDate: latest.current.lastDate,
+      }).catch((e) => console.warn("Restart save failed, staying local:", e));
+    }
+  };
+
   const updateProfile = (patch: Partial<Profile>) => {
     setProfile((p) => {
       const next = { ...p, ...patch };
@@ -482,6 +497,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       commitWalk,
       updateWalkEntry,
       advanceBlock,
+      restartBlockPosition,
       updateHistoryEntry,
       deleteHistoryEntry,
       signUp,

@@ -130,4 +130,9 @@ export type ActiveWorkout = {
   celebrated?: boolean;
   logged?: boolean;
   fc?: FinishCopy;
+  // Set when this session was started from Today's comeback card (10+ days away).
+  // factor<1 eases prefilled weights down one time; factor===1 means "pick up at
+  // my old weights" — no easing, but still recorded so the comeback card doesn't
+  // show again for this position. Cleared once the session logs.
+  comeback?: { factor: number } | null;
 };
