@@ -2,14 +2,35 @@ import { BaseMovement, Letter, MovementType, RepStyleKey } from "./gymProgram";
 
 export type Units = "imperial" | "metric";
 export type Goal = "lose" | "build" | "energy" | "habit" | "confidence" | "event";
+// Matches the prototype's WHERE_LABEL keys. Only "gym" has its own movement bank
+// ported (lib/gymProgram.ts's GYM) — the others are real, settable choices (so the
+// data model and the UI aren't lying about what a beginner can pick), but session
+// building falls back to GYM for all of them, same as the prototype's own
+// `SETS[where] || GYM` fallback and its "Home programs are placeholders until the
+// trainer writes them" copy. Porting real home/garage/hotel/outside movement banks
+// is a separate, comparably-sized task, not done here.
+export type Where = "gym" | "home_db" | "home_none" | "garage" | "hotel" | "outside";
+export const WHERE_LABEL: Record<Where, string> = {
+  gym: "At a gym",
+  home_db: "Home, dumbbells",
+  home_none: "Home, no equipment",
+  garage: "Garage gym",
+  hotel: "Hotel or travel",
+  outside: "Outside",
+};
+export const PAIN_AREAS = ["knees", "back", "shoulders", "wrists", "neck"] as const;
+export type PainArea = (typeof PAIN_AREAS)[number];
+export function painAreaLabel(k: PainArea): string {
+  return k === "back" ? "Lower back" : k[0].toUpperCase() + k.slice(1);
+}
 
 export type Profile = {
   name: string;
   units: Units;
-  where: "gym";
+  where: Where;
   reps: RepStyleKey;
   length: number; // minutes: 30 | 45 | 60
-  pain: string[]; // e.g. ["knees", "back", "shoulders"]
+  pain: PainArea[]; // e.g. ["knees", "back", "shoulders"]
   age: number | null;
   heightCm: number | null;
   weight: number | null; // in the profile's current `units`, like the prototype

@@ -6,12 +6,32 @@ import * as Haptics from "expo-haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
+import { PAIN_AREAS, PainArea, Where, WHERE_LABEL, painAreaLabel } from "../lib/types";
 
 const LENGTHS: { v: number; l: string }[] = [
   { v: 30, l: "30" },
   { v: 45, l: "45" },
   { v: 60, l: "60 min" },
 ];
+
+function Pill({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={() => {
+        Haptics.selectionAsync().catch(() => {});
+        onPress();
+      }}
+      style={[pillStyles.pill, { borderColor: on ? colors.ink : colors.line, backgroundColor: on ? colors.ink : colors.raised }]}
+    >
+      <Text style={{ color: on ? colors.paper : colors.ink, fontSize: 13, fontFamily: fonts.bodySemiBold }}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+const pillStyles = StyleSheet.create({
+  pill: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999, borderWidth: 1 },
+});
 
 export default function TrainingPreferencesScreen() {
   const { colors } = useTheme();
@@ -70,6 +90,59 @@ export default function TrainingPreferencesScreen() {
             </View>
           </View>
         </View>
+
+        <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.lg }]}>WHERE AND WHAT</Text>
+        <View style={[styles.group, { borderColor: colors.line }]}>
+          <View style={styles.item}>
+            <Text style={{ color: colors.ink, fontSize: 14, fontFamily: fonts.bodyMedium }}>Where you train</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2, marginBottom: 10, lineHeight: 16 }}>
+              Home programs are placeholders until the trainer writes them — picking one won't change your movements
+              yet, just what the app calls it.
+            </Text>
+            <View style={styles.pillWrap}>
+              {(Object.keys(WHERE_LABEL) as Where[]).map((k) => (
+                <Pill
+                  key={k}
+                  label={WHERE_LABEL[k]}
+                  on={appState.profile.where === k}
+                  onPress={() => {
+                    appState.updateProfile({ where: k });
+                    appState.setActive(null);
+                  }}
+                />
+              ))}
+            </View>
+          </View>
+        </View>
+
+        <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.lg }]}>BODY</Text>
+        <View style={[styles.group, { borderColor: colors.line }]}>
+          <View style={styles.item}>
+            <Text style={{ color: colors.ink, fontSize: 14, fontFamily: fonts.bodyMedium }}>Anything that hurts</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2, marginBottom: 10, lineHeight: 16 }}>
+              Movements swap around it automatically.
+            </Text>
+            <View style={styles.pillWrap}>
+              {PAIN_AREAS.map((k) => {
+                const on = appState.profile.pain.includes(k);
+                return (
+                  <Pill
+                    key={k}
+                    label={painAreaLabel(k)}
+                    on={on}
+                    onPress={() => {
+                      const next: PainArea[] = on
+                        ? appState.profile.pain.filter((x) => x !== k)
+                        : [...appState.profile.pain, k];
+                      appState.updateProfile({ pain: next });
+                      appState.setActive(null);
+                    }}
+                  />
+                );
+              })}
+            </View>
+          </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -87,4 +160,5 @@ const styles = StyleSheet.create({
   item: { padding: 14 },
   seg: { flexDirection: "row", borderRadius: 10, padding: 3, gap: 2, alignSelf: "flex-start" },
   segBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  pillWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 });

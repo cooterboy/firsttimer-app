@@ -7,6 +7,7 @@ import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing, type } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import { fmtDate } from "../lib/sessionEngine";
+import { WHERE_LABEL } from "../lib/types";
 import Card from "../components/Card";
 
 function initials(name: string) {
@@ -32,7 +33,9 @@ export default function YouScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.name, { color: colors.ink, fontFamily: fonts.display }]}>{profile.name || "You"}</Text>
-            <Text style={[styles.sub, { color: colors.muted }]}>Gym · since {since}</Text>
+            <Text style={[styles.sub, { color: colors.muted }]}>
+              Gym · {WHERE_LABEL[profile.where]} · since {since}
+            </Text>
           </View>
         </View>
 
@@ -58,7 +61,9 @@ export default function YouScreen() {
               <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>
                 Training preferences
               </Text>
-              <Text style={[styles.itemSub, { color: colors.muted }]}>Gym · Mon, Wed, Fri · {profile.length} min</Text>
+              <Text style={[styles.itemSub, { color: colors.muted }]}>
+                {WHERE_LABEL[profile.where]} · Mon, Wed, Fri · {profile.length} min
+              </Text>
             </View>
             <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
           </TouchableOpacity>

@@ -124,10 +124,10 @@ export async function fetchRemoteState(userId: string): Promise<RemoteState | nu
     profile: {
       name: profileRow.name || "",
       units: (profileRow.units as Profile["units"]) || "imperial",
-      where: "gym",
+      where: (profileRow.training_location as Profile["where"]) || "gym",
       reps: (profileRow.reps as Profile["reps"]) || "balanced",
       length: profileRow.length || 45,
-      pain: profileRow.pain || [],
+      pain: (profileRow.pain as Profile["pain"]) || [],
       age: profileRow.age,
       heightCm: profileRow.height_cm,
       weight: profileRow.weight,
