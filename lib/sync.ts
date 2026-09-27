@@ -196,6 +196,11 @@ export async function pushSession(userId: string, entry: HistoryEntry) {
   if (error) throw error;
 }
 
+export async function deleteSession(userId: string, id: string) {
+  const { error } = await supabase.from("sessions").delete().eq("user_id", userId).eq("id", id);
+  if (error) throw error;
+}
+
 export async function pushMobility(userId: string, entry: MobilityEntry) {
   const row = { id: entry.id, user_id: userId, date: entry.date, minutes: entry.minutes, updated_at: new Date().toISOString() };
   const { error } = await supabase.from("mobility_logs").upsert(row);

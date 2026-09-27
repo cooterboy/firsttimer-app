@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "./supabase";
 import {
+  deleteSession as deleteSessionRemote,
   fetchRemoteState,
   pushMobility,
   pushProfile,
@@ -70,6 +71,7 @@ type AppStateContextValue = AppState & {
   updateWalkEntry: (id: string, patch: Partial<WalkEntry>) => void;
   advanceBlock: () => void;
   updateHistoryEntry: (block: number, idx: number, patch: Partial<HistoryEntry>) => void;
+  deleteHistoryEntry: (block: number, idx: number) => void;
   signUp: (email: string, password: string, name: string, units: Profile["units"]) => Promise<{ error: string | null; needsEmailConfirm: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -380,6 +382,30 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
+  // prototype's sdDelYes handler: remove it, and if it was the most recently logged
+  // session, rewind the block position back one so the next session prefills from
+  // whatever's now actually last, matching exactly (a flat -1 on streak, no smarter
+  // recompute — same simplification the prototype makes).
+  const deleteHistoryEntry = (blockN: number, idx: number) => {
+    const target = history.find((e) => e.block === blockN && e.idx === idx);
+    if (!target) return;
+    setHistory((h) => h.filter((e) => !(e.block === blockN && e.idx === idx)));
+    const rewindSession = blockN === latest.current.block && idx === latest.current.session - 1;
+    const newSession = rewindSession ? Math.max(0, latest.current.session - 1) : latest.current.session;
+    const newStreak = Math.max(0, latest.current.streak - 1);
+    setStreak(newStreak);
+    if (rewindSession) setSession(newSession);
+    if (userId) {
+      deleteSessionRemote(userId, target.id).catch((e) => console.warn("Session delete failed, staying local:", e));
+      pushProfile(userId, latest.current.profile, {
+        block: latest.current.block,
+        session: newSession,
+        streak: newStreak,
+        lastDate: latest.current.lastDate,
+      }).catch((e) => console.warn("Profile save failed, staying local:", e));
+    }
+  };
+
   const signUp = async (email: string, password: string, name: string, units: Profile["units"]) => {
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) return { error: error.message, needsEmailConfirm: false };
@@ -457,6 +483,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       updateWalkEntry,
       advanceBlock,
       updateHistoryEntry,
+      deleteHistoryEntry,
       signUp,
       signIn,
       signOut,

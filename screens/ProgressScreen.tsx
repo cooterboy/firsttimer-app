@@ -53,7 +53,7 @@ export default function ProgressScreen() {
           </>
         )}
       </ScrollView>
-      <SessionDetailSheet entry={openEntry} units={profile.units} onClose={() => setOpenKey(null)} />
+      <SessionDetailSheet entry={openEntry} units={profile.units} history={history} onClose={() => setOpenKey(null)} />
     </SafeAreaView>
   );
 }
