@@ -24,8 +24,13 @@ const WEEKDAY_NUMBER: Record<number, number> = { 0: 2, 1: 3, 2: 4, 3: 5, 4: 6, 5
 const REMINDER_ID = (planIdx: number) => `first-timer-training-reminder-${planIdx}`;
 
 export async function getNotificationPermissionGranted(): Promise<boolean> {
-  const { status } = await Notifications.getPermissionsAsync();
-  return status === "granted";
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    return status === "granted";
+  } catch (e) {
+    console.warn("Could not check notification permission:", e);
+    return false;
+  }
 }
 
 // Returns whether permission ended up granted. Only prompts if not already decided —
@@ -33,11 +38,16 @@ export async function getNotificationPermissionGranted(): Promise<boolean> {
 // again (iOS won't re-show its own dialog either way; the caller should point them
 // at system Settings instead).
 export async function requestNotificationPermission(): Promise<boolean> {
-  const existing = await Notifications.getPermissionsAsync();
-  if (existing.status === "granted") return true;
-  if (existing.status === "denied" && existing.canAskAgain === false) return false;
-  const req = await Notifications.requestPermissionsAsync();
-  return req.status === "granted";
+  try {
+    const existing = await Notifications.getPermissionsAsync();
+    if (existing.status === "granted") return true;
+    if (existing.status === "denied" && existing.canAskAgain === false) return false;
+    const req = await Notifications.requestPermissionsAsync();
+    return req.status === "granted";
+  } catch (e) {
+    console.warn("Could not request notification permission:", e);
+    return false;
+  }
 }
 
 function parseRemindTime(remindTime: string): { hour: number; minute: number } {
