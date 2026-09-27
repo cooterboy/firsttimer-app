@@ -81,6 +81,22 @@ export default function YouScreen() {
 
         <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.lg }]}>SUPPORT</Text>
         <Card style={{ padding: 0, overflow: "hidden" }}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            style={[styles.item, { borderBottomWidth: 1, borderBottomColor: colors.line }]}
+            onPress={() => navigation.navigate("Privacy")}
+          >
+            <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Privacy policy</Text>
+            <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            style={[styles.item, { borderBottomWidth: 1, borderBottomColor: colors.line }]}
+            onPress={() => navigation.navigate("Terms")}
+          >
+            <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Terms of use</Text>
+            <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
+          </TouchableOpacity>
           <View style={[styles.item, { borderBottomWidth: 0 }]}>
             <Text style={[styles.itemTitle, { color: colors.muted, fontFamily: fonts.bodyMedium }]}>
               First Timer · v0.1

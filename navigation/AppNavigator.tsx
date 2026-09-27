@@ -9,6 +9,8 @@ import AccountScreen from "../screens/AccountScreen";
 import SettingsScreen from "../screens/SettingsScreen";
 import TrainingPreferencesScreen from "../screens/TrainingPreferencesScreen";
 import BackfillScreen from "../screens/BackfillScreen";
+import PrivacyScreen from "../screens/PrivacyScreen";
+import TermsScreen from "../screens/TermsScreen";
 
 const Tab = createBottomTabNavigator();
 const TodayStack = createNativeStackNavigator();
@@ -39,6 +41,8 @@ function YouStackScreen() {
       <YouStack.Screen name="Account" component={AccountScreen} options={{ presentation: "card" }} />
       <YouStack.Screen name="Settings" component={SettingsScreen} options={{ presentation: "card" }} />
       <YouStack.Screen name="TrainingPreferences" component={TrainingPreferencesScreen} options={{ presentation: "card" }} />
+      <YouStack.Screen name="Privacy" component={PrivacyScreen} options={{ presentation: "card" }} />
+      <YouStack.Screen name="Terms" component={TermsScreen} options={{ presentation: "card" }} />
     </YouStack.Navigator>
   );
 }
