@@ -25,7 +25,7 @@ export default function TrainingPreferencesScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
       <View style={styles.topBar}>
-        <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.goBack()} style={styles.backBtn} accessibilityLabel="Back" accessibilityRole="button" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Text style={{ color: colors.ink, fontSize: 20 }}>‹</Text>
         </TouchableOpacity>
         <Text style={[styles.topTitle, { color: colors.ink, fontFamily: fonts.bodyBold }]}>Training preferences</Text>

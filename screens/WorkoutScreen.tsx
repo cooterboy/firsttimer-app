@@ -269,7 +269,7 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
           <View style={styles.topBar}>
             <View style={styles.topRow}>
               {wo.mi > 0 ? (
-                <TouchableOpacity activeOpacity={0.7} onPress={() => goMove(wo.mi - 1)} style={styles.backBtn}>
+                <TouchableOpacity activeOpacity={0.7} onPress={() => goMove(wo.mi - 1)} style={styles.backBtn} accessibilityLabel="Back" accessibilityRole="button" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                   <Text style={{ color: colors.ink, fontSize: 20 }}>‹</Text>
                 </TouchableOpacity>
               ) : (

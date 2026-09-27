@@ -173,7 +173,7 @@ export default function BackfillScreen() {
 function TopBar({ colors, onBack }: { colors: ReturnType<typeof useTheme>["colors"]; onBack: () => void }) {
   return (
     <View style={styles.topBar}>
-      <TouchableOpacity activeOpacity={0.7} onPress={onBack} style={styles.backBtn}>
+      <TouchableOpacity activeOpacity={0.7} onPress={onBack} style={styles.backBtn} accessibilityLabel="Back" accessibilityRole="button" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <Text style={{ color: colors.ink, fontSize: 20 }}>‹</Text>
       </TouchableOpacity>
       <Text style={[styles.topTitle, { color: colors.ink, fontFamily: fonts.bodyBold }]}>Add a session</Text>

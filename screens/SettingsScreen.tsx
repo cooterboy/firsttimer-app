@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
@@ -7,6 +7,12 @@ import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import { ThemeMode } from "../lib/ThemeContext";
+import {
+  cancelTrainingReminders,
+  getNotificationPermissionGranted,
+  requestNotificationPermission,
+  scheduleTrainingReminders,
+} from "../lib/notifications";
 
 function Seg<T extends string>({ value, options, onChange }: { value: T; options: { v: T; l: string }[]; onChange: (v: T) => void }) {
   const { colors } = useTheme();
@@ -65,6 +71,15 @@ export default function SettingsScreen() {
   const appState = useAppState();
   const navigation = useNavigation<any>();
   const [remindTime, setRemindTime] = useState(appState.settings.remindTime);
+  // Whether the OS actually has notification permission granted right now — the
+  // toggle needs to reflect this, not just the stored preference, since the user can
+  // revoke it in system Settings at any time without the app knowing.
+  const [notifBlocked, setNotifBlocked] = useState(false);
+  // Read fresh inside the focus-check below without making its effect re-fire on
+  // every settings change — it should only actually check on a real focus event.
+  const remindersOnRef = React.useRef(appState.settings.reminders);
+  remindersOnRef.current = appState.settings.reminders;
+
   // Same defensive re-sync as Account (see its comment) — cheap insurance against
   // screen-instance reuse, even though nothing outside this screen currently
   // changes remindTime.
@@ -75,10 +90,57 @@ export default function SettingsScreen() {
     }, [appState.settings.remindTime])
   );
 
+  // Reconciles the stored preference against real OS permission, only on an actual
+  // focus event (e.g. returning from system Settings) — not on every settings change.
+  useFocusEffect(
+    React.useCallback(() => {
+      (async () => {
+        const granted = await getNotificationPermissionGranted();
+        setNotifBlocked(!granted && remindersOnRef.current);
+        if (!granted && remindersOnRef.current) {
+          appState.updateSettings({ reminders: false });
+          cancelTrainingReminders().catch(() => {});
+        }
+      })();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+  );
+
+  const toggleReminders = async (wantsOn: boolean) => {
+    Haptics.selectionAsync().catch(() => {});
+    if (!wantsOn) {
+      appState.updateSettings({ reminders: false });
+      cancelTrainingReminders().catch(() => {});
+      setNotifBlocked(false);
+      return;
+    }
+    const granted = await requestNotificationPermission();
+    if (!granted) {
+      setNotifBlocked(true);
+      Alert.alert(
+        "Notifications are off",
+        "Turn them on for First Timer in your phone's Settings app, then come back and try again.",
+        [
+          { text: "Not now", style: "cancel" },
+          { text: "Open Settings", onPress: () => Linking.openSettings() },
+        ]
+      );
+      return;
+    }
+    setNotifBlocked(false);
+    await scheduleTrainingReminders(appState.settings.remindTime).catch(() => {});
+    appState.updateSettings({ reminders: true });
+  };
+
+  const onRemindTimeBlur = () => {
+    appState.updateSettings({ remindTime });
+    if (appState.settings.reminders) scheduleTrainingReminders(remindTime).catch(() => {});
+  };
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
       <View style={styles.topBar}>
-        <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.goBack()} style={styles.backBtn} accessibilityLabel="Back" accessibilityRole="button" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Text style={{ color: colors.ink, fontSize: 20 }}>‹</Text>
         </TouchableOpacity>
         <Text style={[styles.topTitle, { color: colors.ink, fontFamily: fonts.bodyBold }]}>Settings</Text>
@@ -168,13 +230,14 @@ export default function SettingsScreen() {
         <View style={[styles.group, { borderColor: colors.line }]}>
           <Row
             title="Training reminders"
-            sub={appState.settings.reminders ? `Mon, Wed, Fri at ${appState.settings.remindTime}` : "Off"}
-            right={
-              <Switch
-                value={appState.settings.reminders}
-                onValueChange={hapticToggle((v: boolean) => appState.updateSettings({ reminders: v }))}
-              />
+            sub={
+              notifBlocked
+                ? "Blocked in your phone's Settings"
+                : appState.settings.reminders
+                ? `Mon, Wed, Fri at ${appState.settings.remindTime}`
+                : "Off"
             }
+            right={<Switch value={appState.settings.reminders} onValueChange={toggleReminders} />}
           />
           {appState.settings.reminders ? (
             <View style={[styles.row, { borderBottomColor: colors.line }]}>
@@ -182,7 +245,7 @@ export default function SettingsScreen() {
               <TextInput
                 value={remindTime}
                 onChangeText={setRemindTime}
-                onBlur={() => appState.updateSettings({ remindTime })}
+                onBlur={onRemindTimeBlur}
                 placeholder="7:00 am"
                 placeholderTextColor={colors.muted}
                 style={[styles.timeInput, { color: colors.ink, backgroundColor: colors.sunken }]}
@@ -196,7 +259,8 @@ export default function SettingsScreen() {
           />
         </View>
         <Text style={[styles.note, { color: colors.muted }]}>
-          Reminders are stored as a preference for now — actual push notifications are a later build step.
+          The weigh-in prompt is saved as a preference for now — the actual weekly check-in screen is a later build
+          step.
         </Text>
       </ScrollView>
     </SafeAreaView>
