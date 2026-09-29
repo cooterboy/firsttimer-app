@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from "react";
-import { Animated, Easing, Text, View, StyleSheet } from "react-native";
+import { Animated, Easing, Text, StyleSheet } from "react-native";
 import Svg, { Circle } from "react-native-svg";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../../lib/haptics";
+import { playBeep } from "../../lib/sound";
 import { useTheme } from "../../lib/ThemeContext";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -19,6 +20,7 @@ export default function CelebrateRing() {
   const checkAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    playBeep();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     Animated.spring(entranceAnim, { toValue: 1, friction: 6, tension: 55, delay: 60, useNativeDriver: true }).start();
     Animated.timing(ringAnim, {
@@ -29,6 +31,7 @@ export default function CelebrateRing() {
       useNativeDriver: false,
     }).start();
     Animated.spring(checkAnim, { toValue: 1, friction: 5, tension: 140, delay: 750, useNativeDriver: true }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount; the anim refs are stable for the component's life
   }, []);
 
   const strokeDashoffset = ringAnim.interpolate({ inputRange: [0, 1], outputRange: [RING_CIRCUMFERENCE, 0] });

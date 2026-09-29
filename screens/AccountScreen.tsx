@@ -1,28 +1,18 @@
 import React, { useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, Keyboard, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../lib/haptics";
 import { useTheme } from "../lib/ThemeContext";
-import { fonts, spacing, type } from "../lib/theme";
+import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import { unit } from "../lib/gymProgram";
-import { historyCsv, historyJson, nutritionCard } from "../lib/sessionEngine";
+import { historyCsv, historyJson } from "../lib/sessionEngine";
 import { saveAndShare } from "../lib/exportFile";
 import { clearCachedState } from "../lib/localCache";
-import { Goal } from "../lib/types";
+import { Goal, GOAL_LABEL } from "../lib/types";
 import { supabase } from "../lib/supabase";
-import Card from "../components/Card";
 import Sheet from "../components/workout/Sheet";
-
-const GOAL_LABEL: Record<Goal, string> = {
-  lose: "Lose fat",
-  build: "Build muscle",
-  energy: "Feel stronger day to day",
-  habit: "Build the habit",
-  confidence: "Feel at home in a gym",
-  event: "Training for an event",
-};
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   const { colors } = useTheme();
@@ -33,39 +23,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       </Text>
       {children}
     </View>
-  );
-}
-
-function NutritionRow({ k, sub, v }: { k: string; sub: string; v: React.ReactNode }) {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.nutRow}>
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: colors.ink, fontSize: 14, fontFamily: fonts.bodyMedium }}>{k}</Text>
-        <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2, lineHeight: 16 }}>{sub}</Text>
-      </View>
-      <Text style={{ color: colors.ink, fontFamily: fonts.monoBold, fontSize: 14 }}>{v}</Text>
-    </View>
-  );
-}
-
-function NutritionCard() {
-  const { colors } = useTheme();
-  const appState = useAppState();
-  const n = nutritionCard(appState.profile);
-  return (
-    <Card>
-      <NutritionRow k="Protein" sub="Every day, spread over meals. Not just training days." v={n.protein} />
-      <NutritionRow k="Water" sub="More on training days. Pale yellow is the check." v={n.water} />
-      <NutritionRow k="Calories" sub={n.calorieSub} v={n.calorieLine} />
-      <NutritionRow k="Sleep" sub="The workout is the stimulus. Sleep is where the change happens." v="7–9 h" />
-      <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 4 }}>
-        {n.hasData
-          ? "Worked out from your weight, height and age above. Update them and these move with it."
-          : "Fill in your weight, height and age above and these fill in for you."}{" "}
-        A certified trainer signs off on the ranges.
-      </Text>
-    </Card>
   );
 }
 
@@ -106,11 +63,11 @@ export default function AccountScreen() {
       setHeightFt(p.heightCm ? String(Math.floor(p.heightCm / 2.54 / 12)) : "");
       setHeightIn(p.heightCm ? String(Math.round((p.heightCm / 2.54) % 12)) : "");
       setGoal(p.goal);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [appState.profile])
   );
 
   const save = () => {
+    Keyboard.dismiss();
     const nextHeightCm = isMetric
       ? Number(heightCm) || null
       : Number(heightFt) || Number(heightIn)
@@ -128,6 +85,11 @@ export default function AccountScreen() {
   };
 
   const [exportOpen, setExportOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwOld, setPwOld] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [pwErr, setPwErr] = useState("");
+  const [pwBusy, setPwBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const exportCsv = async () => {
@@ -135,7 +97,7 @@ export default function AccountScreen() {
     try {
       const csv = historyCsv(appState.history, appState.profile.units, appState.mobility, appState.walks, appState.weighins);
       await saveAndShare("first-timer-sessions.csv", csv, "text/csv");
-    } catch (e) {
+    } catch {
       Alert.alert("Couldn't export", "Something went wrong saving that file.");
     } finally {
       setExporting(false);
@@ -158,7 +120,7 @@ export default function AccountScreen() {
         weighins: appState.weighins,
       });
       await saveAndShare("first-timer-data.json", json, "application/json");
-    } catch (e) {
+    } catch {
       Alert.alert("Couldn't export", "Something went wrong saving that file.");
     } finally {
       setExporting(false);
@@ -174,13 +136,37 @@ export default function AccountScreen() {
       if (error) throw error;
       if (appState.userId) await clearCachedState(appState.userId);
       await appState.signOut();
-    } catch (e: any) {
+    } catch {
       setDeleting(false);
       Alert.alert(
         "Couldn't delete",
         "The delete-account function isn't reachable yet — see supabase/functions/delete-account for deploy instructions."
       );
     }
+  };
+
+  const closePwSheet = () => {
+    setPwOpen(false);
+    setPwOld("");
+    setPwNew("");
+    setPwErr("");
+  };
+
+  const submitPasswordChange = async () => {
+    if (pwNew.length < 8) {
+      setPwErr("New password needs 8 characters.");
+      return;
+    }
+    setPwErr("");
+    setPwBusy(true);
+    const { error } = await appState.changePassword(pwOld, pwNew);
+    setPwBusy(false);
+    if (error) {
+      setPwErr(error);
+      return;
+    }
+    closePwSheet();
+    Alert.alert("Password changed.");
   };
 
   return (
@@ -298,9 +284,6 @@ export default function AccountScreen() {
           <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 15 }}>Save</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.xl }]}>RECOVERY, IN FOUR LINES</Text>
-        <NutritionCard />
-
         <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.xl }]}>YOUR DATA</Text>
         <TouchableOpacity activeOpacity={0.7} style={[styles.row, { borderColor: colors.line }]} onPress={() => setExportOpen(true)}>
           <Text style={{ color: colors.ink, fontSize: 14, fontFamily: fonts.bodySemiBold }}>Download everything</Text>
@@ -310,6 +293,9 @@ export default function AccountScreen() {
         </TouchableOpacity>
 
         <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.xl }]}>SIGN-IN</Text>
+        <TouchableOpacity activeOpacity={0.7} style={[styles.row, { borderColor: colors.line }]} onPress={() => setPwOpen(true)}>
+          <Text style={{ color: colors.ink, fontSize: 14, fontFamily: fonts.bodySemiBold }}>Change password</Text>
+        </TouchableOpacity>
         <TouchableOpacity activeOpacity={0.7}
           style={[styles.row, { borderColor: colors.line }]}
           onPress={async () => {
@@ -381,6 +367,43 @@ export default function AccountScreen() {
           <Text style={{ color: colors.ink, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>Everything (.json)</Text>
         </TouchableOpacity>
       </Sheet>
+
+      <Sheet visible={pwOpen} onClose={closePwSheet}>
+        <Text style={{ color: colors.ink, fontFamily: fonts.display, fontSize: 24, letterSpacing: 0.5, marginBottom: 8 }}>
+          Change password
+        </Text>
+        <Text style={{ color: colors.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: 1, fontWeight: "700", marginBottom: 6 }}>
+          Current password
+        </Text>
+        <TextInput
+          value={pwOld}
+          onChangeText={setPwOld}
+          secureTextEntry
+          autoComplete="current-password"
+          style={[styles.pwInput, { color: colors.ink, backgroundColor: colors.sunken }]}
+        />
+        <Text style={{ color: colors.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: 1, fontWeight: "700", marginTop: 14, marginBottom: 6 }}>
+          New password
+        </Text>
+        <TextInput
+          value={pwNew}
+          onChangeText={setPwNew}
+          secureTextEntry
+          placeholder="8 characters or more"
+          placeholderTextColor={colors.muted}
+          autoComplete="new-password"
+          style={[styles.pwInput, { color: colors.ink, backgroundColor: colors.sunken }]}
+        />
+        {pwErr ? <Text style={{ color: colors.bad, fontSize: 12, marginTop: 10 }}>{pwErr}</Text> : null}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          disabled={pwBusy}
+          onPress={submitPasswordChange}
+          style={[styles.primary, { backgroundColor: colors.ink, marginTop: 16, opacity: pwBusy ? 0.6 : 1 }]}
+        >
+          <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 15 }}>{pwBusy ? "Saving…" : "Save"}</Text>
+        </TouchableOpacity>
+      </Sheet>
     </SafeAreaView>
   );
 }
@@ -390,7 +413,6 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.sm },
   backBtn: { width: 30, height: 30, alignItems: "center", justifyContent: "center" },
   topTitle: { fontSize: 15 },
-  nutRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 10 },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   input: { padding: 13, fontSize: 16, borderRadius: 11 },
   note: { fontSize: 12, lineHeight: 17, marginTop: -6, marginBottom: 16 },
@@ -402,4 +424,5 @@ const styles = StyleSheet.create({
   dangerCard: { borderWidth: 1, borderRadius: 13, padding: 14 },
   ghostDanger: { borderWidth: 1, borderRadius: 13, padding: 13, alignItems: "center" },
   exportOpt: { borderWidth: 1, borderRadius: 13, padding: 14, alignItems: "center", marginBottom: 10 },
+  pwInput: { borderRadius: 10, padding: 12, fontSize: 14 },
 });

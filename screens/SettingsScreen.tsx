@@ -2,15 +2,19 @@ import React, { useState } from "react";
 import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import * as Haptics from "expo-haptics";
-import { useTheme } from "../lib/ThemeContext";
-import { fonts, spacing } from "../lib/theme";
+import * as Haptics from "../lib/haptics";
+import { playBeep, setSoundsEnabled } from "../lib/sound";
+import { ThemeMode, useTheme } from "../lib/ThemeContext";
+import { ACCENTS, fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
-import { ThemeMode } from "../lib/ThemeContext";
 import {
+  cancelMobilityReminder,
+  cancelRecapReminder,
   cancelTrainingReminders,
   getNotificationPermissionGranted,
   requestNotificationPermission,
+  scheduleMobilityReminder,
+  scheduleRecapReminder,
   scheduleTrainingReminders,
 } from "../lib/notifications";
 
@@ -78,7 +82,9 @@ export default function SettingsScreen() {
   // Read fresh inside the focus-check below without making its effect re-fire on
   // every settings change — it should only actually check on a real focus event.
   const remindersOnRef = React.useRef(appState.settings.reminders);
-  remindersOnRef.current = appState.settings.reminders;
+  React.useEffect(() => {
+    remindersOnRef.current = appState.settings.reminders;
+  });
 
   // Same defensive re-sync as Account (see its comment) — cheap insurance against
   // screen-instance reuse, even though nothing outside this screen currently
@@ -86,20 +92,34 @@ export default function SettingsScreen() {
   useFocusEffect(
     React.useCallback(() => {
       setRemindTime(appState.settings.remindTime);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [appState.settings.remindTime])
   );
 
+  // Read fresh inside the focus-check below, same reason as remindersOnRef.
+  const mobilityReminderOnRef = React.useRef(appState.settings.mobilityReminder);
+  React.useEffect(() => {
+    mobilityReminderOnRef.current = appState.settings.mobilityReminder;
+  });
+  const recapReminderOnRef = React.useRef(appState.settings.recapReminder);
+  React.useEffect(() => {
+    recapReminderOnRef.current = appState.settings.recapReminder;
+  });
+
   // Reconciles the stored preference against real OS permission, only on an actual
   // focus event (e.g. returning from system Settings) — not on every settings change.
+  // Permission is shared across all three reminder types, so one revoked check turns
+  // all three off together.
   useFocusEffect(
     React.useCallback(() => {
       (async () => {
         const granted = await getNotificationPermissionGranted();
-        setNotifBlocked(!granted && remindersOnRef.current);
-        if (!granted && remindersOnRef.current) {
-          appState.updateSettings({ reminders: false });
+        const anyOn = remindersOnRef.current || mobilityReminderOnRef.current || recapReminderOnRef.current;
+        setNotifBlocked(!granted && anyOn);
+        if (!granted && anyOn) {
+          appState.updateSettings({ reminders: false, mobilityReminder: false, recapReminder: false });
           cancelTrainingReminders().catch(() => {});
+          cancelMobilityReminder().catch(() => {});
+          cancelRecapReminder().catch(() => {});
         }
       })();
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -132,9 +152,72 @@ export default function SettingsScreen() {
     appState.updateSettings({ reminders: true });
   };
 
+  // Same shape as toggleReminders — mobility day and the Sunday recap share the same
+  // OS permission (there's only one notification permission per app, not per reminder
+  // type), so each toggle prompts/reports the same way.
+  const toggleMobilityReminder = async (wantsOn: boolean) => {
+    Haptics.selectionAsync().catch(() => {});
+    if (!wantsOn) {
+      appState.updateSettings({ mobilityReminder: false });
+      cancelMobilityReminder().catch(() => {});
+      setNotifBlocked(false);
+      return;
+    }
+    const granted = await requestNotificationPermission();
+    if (!granted) {
+      setNotifBlocked(true);
+      Alert.alert(
+        "Notifications are off",
+        "Turn them on for First Timer in your phone's Settings app, then come back and try again.",
+        [
+          { text: "Not now", style: "cancel" },
+          { text: "Open Settings", onPress: () => Linking.openSettings() },
+        ]
+      );
+      return;
+    }
+    setNotifBlocked(false);
+    // The toggle itself always turns on — scheduling the actual notification only
+    // makes sense if Mobility day (above) isn't off.
+    if (appState.settings.mobility !== "off") {
+      await scheduleMobilityReminder(appState.settings.remindTime).catch(() => {});
+    }
+    appState.updateSettings({ mobilityReminder: true });
+  };
+
+  const toggleRecapReminder = async (wantsOn: boolean) => {
+    Haptics.selectionAsync().catch(() => {});
+    if (!wantsOn) {
+      appState.updateSettings({ recapReminder: false });
+      cancelRecapReminder().catch(() => {});
+      setNotifBlocked(false);
+      return;
+    }
+    const granted = await requestNotificationPermission();
+    if (!granted) {
+      setNotifBlocked(true);
+      Alert.alert(
+        "Notifications are off",
+        "Turn them on for First Timer in your phone's Settings app, then come back and try again.",
+        [
+          { text: "Not now", style: "cancel" },
+          { text: "Open Settings", onPress: () => Linking.openSettings() },
+        ]
+      );
+      return;
+    }
+    setNotifBlocked(false);
+    await scheduleRecapReminder(appState.settings.remindTime).catch(() => {});
+    appState.updateSettings({ recapReminder: true });
+  };
+
   const onRemindTimeBlur = () => {
     appState.updateSettings({ remindTime });
     if (appState.settings.reminders) scheduleTrainingReminders(remindTime).catch(() => {});
+    if (appState.settings.mobilityReminder && appState.settings.mobility !== "off") {
+      scheduleMobilityReminder(remindTime).catch(() => {});
+    }
+    if (appState.settings.recapReminder) scheduleRecapReminder(remindTime).catch(() => {});
   };
 
   return (
@@ -175,6 +258,31 @@ export default function SettingsScreen() {
               />
             }
           />
+          <View style={{ paddingHorizontal: 14, paddingTop: 4, paddingBottom: 14 }}>
+            <Text style={{ color: colors.ink, fontSize: 14, fontFamily: fonts.bodyMedium, marginBottom: 2 }}>Accent</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 10 }}>
+              {ACCENTS.find((a) => a.k === appState.settings.accent)?.l || "Safety orange"}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              {ACCENTS.map((a) => (
+                <TouchableOpacity
+                  key={a.k}
+                  activeOpacity={0.7}
+                  accessibilityLabel={a.l}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    appState.updateSettings({ accent: a.k });
+                  }}
+                  style={[
+                    styles.swatch,
+                    { backgroundColor: a.c },
+                    appState.settings.accent === a.k && { borderColor: colors.ink, borderWidth: 2 },
+                  ]}
+                />
+              ))}
+            </View>
+          </View>
         </View>
 
         <Text style={[styles.eyebrow, { color: colors.muted }]}>WORKOUT</Text>
@@ -210,6 +318,27 @@ export default function SettingsScreen() {
             right={<Switch value={appState.settings.warmup} onValueChange={hapticToggle((v: boolean) => appState.updateSettings({ warmup: v }))} />}
           />
           <Row
+            title="Timer sound"
+            sub="A single tone when rest ends."
+            right={
+              <Switch
+                value={appState.settings.sounds}
+                onValueChange={hapticToggle((v: boolean) => {
+                  appState.updateSettings({ sounds: v });
+                  if (v) {
+                    setSoundsEnabled(true);
+                    playBeep();
+                  }
+                })}
+              />
+            }
+          />
+          <Row
+            title="Haptics"
+            sub="A tap when a set is logged."
+            right={<Switch value={appState.settings.haptics} onValueChange={hapticToggle((v: boolean) => appState.updateSettings({ haptics: v }))} />}
+          />
+          <Row
             title="Mobility day"
             sub="Ten timed stretches, about 12 minutes, on a non-training day."
             right={
@@ -220,9 +349,25 @@ export default function SettingsScreen() {
                   { v: "biweekly", l: "Every 2 wks" },
                   { v: "off", l: "Off" },
                 ]}
-                onChange={(v) => appState.updateSettings({ mobility: v })}
+                onChange={(v) => {
+                  appState.updateSettings({ mobility: v });
+                  if (!appState.settings.mobilityReminder) return;
+                  // Reminding about a disabled feature makes no sense — keep the
+                  // reminder toggle's stored value, but stop/start the actual
+                  // notification to match.
+                  if (v === "off") cancelMobilityReminder().catch(() => {});
+                  else scheduleMobilityReminder(appState.settings.remindTime).catch(() => {});
+                }}
               />
             }
+          />
+        </View>
+
+        <View style={[styles.group, { borderColor: colors.line, marginTop: spacing.md }]}>
+          <Row
+            title="Opening card"
+            sub="A two-second line when you first open the app each day. Turn it off to land straight on Today."
+            right={<Switch value={appState.settings.quotes} onValueChange={hapticToggle((v: boolean) => appState.updateSettings({ quotes: v }))} />}
           />
         </View>
 
@@ -253,15 +398,35 @@ export default function SettingsScreen() {
             </View>
           ) : null}
           <Row
+            title="Mobility day"
+            sub={
+              notifBlocked
+                ? "Blocked in your phone's Settings"
+                : appState.settings.mobilityReminder
+                ? appState.settings.mobility === "off"
+                  ? "Nothing to remind about — Mobility day (above) is off"
+                  : `Saturdays at ${appState.settings.remindTime}`
+                : "Off"
+            }
+            right={<Switch value={appState.settings.mobilityReminder} onValueChange={toggleMobilityReminder} />}
+          />
+          <Row
+            title="Sunday recap"
+            sub={
+              notifBlocked
+                ? "Blocked in your phone's Settings"
+                : appState.settings.recapReminder
+                ? `Sundays at ${appState.settings.remindTime}`
+                : "Off"
+            }
+            right={<Switch value={appState.settings.recapReminder} onValueChange={toggleRecapReminder} />}
+          />
+          <Row
             title="Weekly weigh-in prompt"
             sub="Asks once a week on your first training day."
             right={<Switch value={appState.settings.weighin} onValueChange={hapticToggle((v: boolean) => appState.updateSettings({ weighin: v }))} />}
           />
         </View>
-        <Text style={[styles.note, { color: colors.muted }]}>
-          The weigh-in prompt is saved as a preference for now — the actual weekly check-in screen is a later build
-          step.
-        </Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -280,4 +445,5 @@ const styles = StyleSheet.create({
   segBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
   timeInput: { flex: 1, padding: 10, borderRadius: 9, fontSize: 14, textAlign: "right" },
   note: { fontSize: 12, lineHeight: 17, marginTop: 10 },
+  swatch: { width: 36, height: 36, borderRadius: 18 },
 });

@@ -1,11 +1,11 @@
 import React from "react";
-import { Text, TextInput, TouchableOpacity, View, StyleSheet } from "react-native";
-import * as Haptics from "expo-haptics";
+import { Text, TouchableOpacity, View, StyleSheet } from "react-native";
+import * as Haptics from "../../lib/haptics";
 import { useTheme } from "../../lib/ThemeContext";
-import { fonts, radius, spacing, type } from "../../lib/theme";
+import { fonts, radius, spacing } from "../../lib/theme";
 import { ActiveMove } from "../../lib/types";
 import { unit } from "../../lib/gymProgram";
-import { fmtDate, moveNo, nextLabel } from "../../lib/sessionEngine";
+import { fmtDate, nextLabel } from "../../lib/sessionEngine";
 import SetRow from "./SetRow";
 
 type RestState = { total: number; left: number; hold: number } | null;
@@ -31,6 +31,9 @@ export default function MovementView({
   onOpenShortOnTime,
   onUnskip,
   dropSet,
+  plateaued,
+  onOpenPlateauInfo,
+  onDismissPlateau,
 }: {
   move: ActiveMove;
   moveIndex: number;
@@ -52,6 +55,9 @@ export default function MovementView({
   onOpenShortOnTime: () => void;
   onUnskip: () => void;
   dropSet: boolean;
+  plateaued?: boolean;
+  onOpenPlateauInfo?: () => void;
+  onDismissPlateau?: () => void;
 }) {
   const { colors } = useTheme();
   const u = unit(units);
@@ -101,6 +107,24 @@ export default function MovementView({
       <Text style={[styles.cue, { color: colors.ink2 }]}>{move.cue}</Text>
 
       <Text style={[styles.hint, { color: colors.muted }]}>{hintLine}</Text>
+
+      {plateaued ? (
+        <View style={[styles.banner, { backgroundColor: colors.warnSoft, marginTop: 12 }]}>
+          <Text style={{ color: colors.ink, fontSize: 13, lineHeight: 19 }}>
+            <Text style={{ fontFamily: fonts.bodyBold }}>Same weight for a few sessions now.</Text> Worth a form check
+            before adding more, or just clean reps at this weight one more time.
+          </Text>
+          <View style={styles.plateauRow}>
+            <TouchableOpacity activeOpacity={0.7} onPress={onOpenPlateauInfo} style={styles.inlineBtnWrap}>
+              <Text style={[styles.inlineBtn, { color: colors.ink, borderColor: colors.line }]}>See the cue</Text>
+            </TouchableOpacity>
+            <TouchableOpacity activeOpacity={0.7} onPress={onDismissPlateau} style={styles.inlineBtnWrap}>
+              <Text style={[styles.inlineBtn, { color: colors.muted, borderColor: "transparent" }]}>Not now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+
       {firstTime ? (
         <TouchableOpacity activeOpacity={0.7}
           onPress={onOpenFindWeight}
@@ -254,6 +278,7 @@ export default function MovementView({
 
 const styles = StyleSheet.create({
   banner: { padding: 13, borderRadius: 12, marginBottom: 12 },
+  plateauRow: { flexDirection: "row", gap: 8, marginTop: 4 },
   inlineBtnWrap: { marginTop: 8 },
   inlineBtn: { fontSize: 11, fontWeight: "700", textTransform: "uppercase", borderWidth: 1, borderRadius: 9, paddingHorizontal: 11, paddingVertical: 7, alignSelf: "flex-start" },
   video: {

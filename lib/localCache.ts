@@ -6,9 +6,12 @@
 // existing "wait for the network" behavior, so this can never make things worse.
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ActiveWorkout, HistoryEntry, MobilityEntry, Profile, Settings, WalkEntry, WeighIn } from "./types";
+import { ActiveWorkout, Friend, HistoryEntry, MobilityEntry, Profile, Purchase, Settings, WalkEntry, WeighIn } from "./types";
 
-const CACHE_VERSION = 1;
+// Bumped to 2: adds friends/connectedAccounts/notify/purchases. A stale v1 cache
+// would be missing those fields entirely, not just defaulted — simplest and
+// safest is to invalidate it and let the next boot do a real network fetch.
+const CACHE_VERSION = 2;
 
 export type CachedState = {
   profile: Profile;
@@ -21,6 +24,10 @@ export type CachedState = {
   mobility: MobilityEntry[];
   walks: WalkEntry[];
   weighins: WeighIn[];
+  friends: Friend[];
+  connectedAccounts: Record<string, boolean>;
+  notify: Record<string, boolean>;
+  purchases: Purchase[];
   // The in-progress workout, if any — cached too, so a force-quit mid-session
   // doesn't throw away sets already logged (never synced to Supabase; that's
   // fine, this is purely "restore this device to how it looked before it died").

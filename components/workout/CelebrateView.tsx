@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Text, TouchableOpacity, View, StyleSheet } from "react-native";
 import Svg, { Circle } from "react-native-svg";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../../lib/haptics";
+import { playBeep } from "../../lib/sound";
 import { useTheme } from "../../lib/ThemeContext";
 import { fonts, spacing } from "../../lib/theme";
 import { FinishCopy } from "../../lib/sessionEngine";
@@ -69,28 +70,25 @@ function Reveal({
   );
 }
 
+// One purpose: a brief, satisfying beat between finishing the last movement and the
+// rating/tagging screen — always leads there now (previously this also offered
+// "Share" and "Done for today" buttons, letting someone finish a session and never
+// see the tagging screen at all; both of those already exist one screen later, on
+// FinishView, so nothing was lost by removing them here — see WorkoutScreen.tsx).
 export default function CelebrateView({
   fc,
-  nMoves,
-  minutes,
+  session,
+  streak,
   moved,
-  ups,
   unit,
-  blockDone,
-  onSeeResults,
-  onShare,
-  onDone,
+  onContinue,
 }: {
   fc: FinishCopy;
-  nMoves: number;
-  minutes: number;
+  session: number;
+  streak: number;
   moved: number;
-  ups: number;
   unit: string;
-  blockDone: boolean;
-  onSeeResults: () => void;
-  onShare: () => void;
-  onDone: () => void;
+  onContinue: () => void;
 }) {
   const { colors } = useTheme();
 
@@ -104,6 +102,7 @@ export default function CelebrateView({
   const [statsStarted, setStatsStarted] = useState(false);
 
   useEffect(() => {
+    playBeep();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     // The ring container pops in first — a scale+fade that's unmistakably motion —
     // then the stroke sweeps around it, then the checkmark springs in with a little
@@ -175,46 +174,29 @@ export default function CelebrateView({
       <Reveal anim={statsAnim} delay={860} style={styles.statsRow}>
         <>
           <View style={styles.stat}>
-            <CountUpNumber to={nMoves} color={colors.accent} start={statsStarted} />
-            <Text style={[styles.statLabel, { color: colors.muted }]}>Movement{nMoves === 1 ? "" : "s"}</Text>
+            <CountUpNumber to={session} color={colors.accent} start={statsStarted} />
+            <Text style={[styles.statLabel, { color: colors.muted }]}>Session</Text>
           </View>
-          <View style={styles.stat}>
-            <CountUpNumber to={minutes} color={colors.accent} start={statsStarted} />
-            <Text style={[styles.statLabel, { color: colors.muted }]}>Minute{minutes === 1 ? "" : "s"}</Text>
-          </View>
+          {streak > 1 ? (
+            <View style={styles.stat}>
+              <CountUpNumber to={streak} color={colors.accent} start={statsStarted} />
+              <Text style={[styles.statLabel, { color: colors.muted }]}>In a row</Text>
+            </View>
+          ) : null}
           {moved ? (
             <View style={styles.stat}>
               <CountUpNumber to={moved} color={colors.accent} start={statsStarted} />
               <Text style={[styles.statLabel, { color: colors.muted }]}>{unit} moved</Text>
             </View>
           ) : null}
-          {ups ? (
-            <View style={styles.stat}>
-              <CountUpNumber to={ups} color={colors.accent} start={statsStarted} />
-              <Text style={[styles.statLabel, { color: colors.muted }]}>Went up</Text>
-            </View>
-          ) : null}
         </>
       </Reveal>
 
       <Reveal anim={actsAnim} delay={1040} style={styles.acts}>
-        <>
-          <TouchableOpacity activeOpacity={0.7} style={[styles.primary, { backgroundColor: colors.accent }]} onPress={onSeeResults}>
-            <Text style={{ color: colors.accentInk, fontFamily: fonts.bodyBold, fontSize: 15 }}>See your results</Text>
-          </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.7} style={[styles.primaryDark, { backgroundColor: colors.ink }]} onPress={onShare}>
-            <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 15 }}>Share this session</Text>
-          </TouchableOpacity>
-          <TouchableOpacity activeOpacity={0.7} style={styles.ghost} onPress={onDone}>
-            <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>
-              {blockDone ? "See what you built" : "Done for today"}
-            </Text>
-          </TouchableOpacity>
-        </>
+        <TouchableOpacity activeOpacity={0.7} style={[styles.primary, { backgroundColor: colors.accent }]} onPress={onContinue}>
+          <Text style={{ color: colors.accentInk, fontFamily: fonts.bodyBold, fontSize: 15 }}>Rate this session ›</Text>
+        </TouchableOpacity>
       </Reveal>
-      <Text style={[styles.note, { color: colors.muted }]}>
-        Rate it, add a photo, and see what's next under results.
-      </Text>
     </View>
   );
 }
@@ -232,7 +214,4 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 10, textTransform: "uppercase", letterSpacing: 1, fontWeight: "700", marginTop: 4 },
   acts: { width: "100%", gap: spacing.sm },
   primary: { borderRadius: 13, padding: 16, alignItems: "center" },
-  primaryDark: { borderRadius: 13, padding: 16, alignItems: "center" },
-  ghost: { borderRadius: 13, padding: 13, alignItems: "center" },
-  note: { fontSize: 12, textAlign: "center", marginTop: 10 },
 });

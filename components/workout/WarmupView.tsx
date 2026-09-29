@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Text, TouchableOpacity, View, StyleSheet } from "react-native";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../../lib/haptics";
+import { playBeep } from "../../lib/sound";
 import { useTheme } from "../../lib/ThemeContext";
 import { fonts, radius } from "../../lib/theme";
 import { ActiveMove } from "../../lib/types";
@@ -18,7 +19,6 @@ export default function WarmupView({
 }) {
   const { colors } = useTheme();
   const [running, setRunning] = useState(false);
-  const [endAt, setEndAt] = useState<number | null>(null);
   const [left, setLeft] = useState(WARMUP_MS);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -35,7 +35,6 @@ export default function WarmupView({
       return;
     }
     const end = Date.now() + left;
-    setEndAt(end);
     setRunning(true);
     intervalRef.current = setInterval(() => {
       const remaining = Math.max(0, end - Date.now());
@@ -43,6 +42,7 @@ export default function WarmupView({
       if (remaining <= 0) {
         if (intervalRef.current) clearInterval(intervalRef.current);
         setRunning(false);
+        playBeep();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       }
     }, 500);

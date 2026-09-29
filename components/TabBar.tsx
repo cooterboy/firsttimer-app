@@ -2,14 +2,16 @@ import React from "react";
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Text, TouchableOpacity, View, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../lib/haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts } from "../lib/theme";
-import { ProgressIcon, TodayIcon, YouIcon } from "./TabIcon";
+import { ProgramsIcon, ProgressIcon, ShopIcon, TodayIcon, YouIcon } from "./TabIcon";
 
 const ICONS: Record<string, (props: { color: string }) => React.ReactElement> = {
   Today: TodayIcon,
   Progress: ProgressIcon,
+  Programs: ProgramsIcon,
+  Shop: ShopIcon,
   You: YouIcon,
 };
 

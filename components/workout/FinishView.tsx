@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Share, Text, TextInput, TouchableOpacity, View, StyleSheet } from "react-native";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../../lib/haptics";
 import { useTheme } from "../../lib/ThemeContext";
 import { fonts, spacing } from "../../lib/theme";
 import { ActiveMove, ActiveWorkout, HistoryEntry, Profile } from "../../lib/types";
@@ -157,6 +157,20 @@ export default function FinishView({
               ? `${retest.liftsUp} of your lifts went up and none of it came from anywhere but you showing up.`
               : "Every one of them logged."}
           </Text>
+          <View style={styles.tiles}>
+            <View style={[styles.tile, { backgroundColor: colors.sunken }]}>
+              <Text style={[styles.tileNum, { color: colors.ink, fontFamily: fonts.display }]}>{retest.sessions}</Text>
+              <Text style={[styles.tileLabel, { color: colors.muted }]}>Sessions</Text>
+            </View>
+            <View style={[styles.tile, { backgroundColor: colors.sunken }]}>
+              <Text style={[styles.tileNum, { color: colors.ink, fontFamily: fonts.display }]}>{retest.liftsUp}</Text>
+              <Text style={[styles.tileLabel, { color: colors.muted }]}>Lifts up</Text>
+            </View>
+            <View style={[styles.tile, { backgroundColor: colors.sunken }]}>
+              <Text style={[styles.tileNum, { color: colors.ink, fontFamily: fonts.display }]}>{retest.movedLabel}</Text>
+              <Text style={[styles.tileLabel, { color: colors.muted }]}>{u} moved</Text>
+            </View>
+          </View>
           <Text style={[styles.compareHead, { color: colors.muted }]}>Week one against now</Text>
           <View style={styles.compareRow}>
             <Text style={[styles.compareColHead, { color: colors.muted, flex: 1.4 }]}>Movement</Text>
@@ -179,6 +193,15 @@ export default function FinishView({
             Your first logged weight against your latest, in {unit(profile.units)}.
           </Text>
         </Card>
+      ) : null}
+
+      {retest ? (
+        <View style={[styles.carryBanner, { backgroundColor: colors.warnSoft }]}>
+          <Text style={{ color: colors.ink, fontSize: 13, lineHeight: 19 }}>
+            <Text style={{ fontFamily: fonts.bodyBold }}>Every one of those numbers carries into block {wo.block + 1}.</Text>{" "}
+            Same movements, heavier, and the app keeps prefilling from where you actually are.
+          </Text>
+        </View>
       ) : null}
 
       <Card style={{ marginTop: spacing.md }}>
@@ -279,6 +302,11 @@ export default function FinishView({
 const styles = StyleSheet.create({
   head: { marginBottom: 4 },
   retestBig: { fontSize: 28, letterSpacing: 0.5, marginTop: 2, marginBottom: 4 },
+  tiles: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  tile: { flex: 1, borderRadius: 12, padding: 12, alignItems: "center" },
+  tileNum: { fontSize: 22, marginBottom: 2 },
+  tileLabel: { fontSize: 11, textAlign: "center" },
+  carryBanner: { borderRadius: 12, padding: 13, marginTop: spacing.md },
   compareHead: { fontSize: 11, textTransform: "uppercase", letterSpacing: 1, fontWeight: "700", marginBottom: 8 },
   compareRow: { flexDirection: "row", alignItems: "center" },
   compareColHead: { fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: "700", paddingBottom: 6 },

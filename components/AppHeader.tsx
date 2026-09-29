@@ -14,6 +14,7 @@ export default function AppHeader() {
   const navigation = useNavigation<any>();
   const total = weeksPerBlock();
   const weekFilled = weekOf(appState.session) - 1;
+  const initials = (appState.profile.name || "FT").slice(0, 2).toUpperCase();
 
   return (
     <View style={styles.header}>
@@ -36,7 +37,7 @@ export default function AppHeader() {
           </View>
         ) : null}
         <TouchableOpacity activeOpacity={0.7} style={[styles.avatar, { backgroundColor: colors.ink }]} onPress={() => navigation.navigate("You")}>
-          <Text style={[styles.avatarText, { color: colors.paper, fontFamily: fonts.display }]}>FT</Text>
+          <Text style={[styles.avatarText, { color: colors.paper, fontFamily: fonts.display }]}>{initials}</Text>
         </TouchableOpacity>
       </View>
     </View>

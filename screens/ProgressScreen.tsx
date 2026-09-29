@@ -3,20 +3,26 @@ import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../lib/haptics";
 import Svg, { Circle, Line, Polyline, Rect, Text as SvgText } from "react-native-svg";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing, type } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import { BLOCK_SESSIONS, daysPer, unit, weekOf, weeksPerBlock } from "../lib/gymProgram";
 import {
+  buildSessionForProfile,
   fmtDate,
   historyMovedTotal,
   liftDeltas,
+  Milestone,
+  milestoneList,
   movedLabel,
   newWeighIn,
   setsSummary,
+  tagCounts,
   weeklyWeights,
+  weekKey,
+  weekRecap,
   weighedThisWeek,
 } from "../lib/sessionEngine";
 import { walkKindLabel } from "../lib/walkProgram";
@@ -25,6 +31,16 @@ import AppHeader from "../components/AppHeader";
 import Card from "../components/Card";
 import SessionDetailSheet from "../components/SessionDetailSheet";
 import MovementDetailSheet from "../components/MovementDetailSheet";
+import WeighInDetailSheet from "../components/WeighInDetailSheet";
+import RecapCard from "../components/RecapCard";
+
+type ProgressTab = "overview" | "lifts" | "body" | "history";
+const PROGRESS_TABS: { v: ProgressTab; l: string }[] = [
+  { v: "overview", l: "Overview" },
+  { v: "lifts", l: "Lifts" },
+  { v: "body", l: "Body" },
+  { v: "history", l: "History" },
+];
 
 export default function ProgressScreen() {
   const { colors } = useTheme();
@@ -32,10 +48,14 @@ export default function ProgressScreen() {
   const navigation = useNavigation<any>();
   const tabBarHeight = useBottomTabBarHeight();
   const { history, mobility, walks, weighins, streak, block, session, profile } = appState;
+  const [tab, setTab] = useState<ProgressTab>("overview");
   const [openKey, setOpenKey] = useState<{ block: number; idx: number } | null>(null);
   const openEntry = openKey ? history.find((h) => h.block === openKey.block && h.idx === openKey.idx) || null : null;
   const [openLift, setOpenLift] = useState<string | null>(null);
+  const [openWeighInId, setOpenWeighInId] = useState<string | null>(null);
+  const openWeighIn = openWeighInId ? weighins.find((w) => w.id === openWeighInId) || null : null;
   const hasAnything = history.length > 0 || mobility.length > 0 || walks.length > 0;
+  const milestones = milestoneList(history, mobility, walks, streak, block, profile.units);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]} edges={["top"]}>
@@ -47,56 +67,158 @@ export default function ProgressScreen() {
         <Text style={[styles.title, { color: colors.ink, fontFamily: fonts.display }]}>Progress</Text>
 
         {!hasAnything ? (
-          <EmptyState colors={colors} />
+          <EmptyState colors={colors} movementBank={appState.movementBank} block={block} profile={profile} />
         ) : (
           <>
-            <Overview colors={colors} history={history} streak={streak} units={profile.units} />
-            <WeekChart colors={colors} history={history} />
-            <Lifts colors={colors} history={history} units={profile.units} onOpen={setOpenLift} />
-            <Body colors={colors} weighins={weighins} units={profile.units} onLog={appState.commitWeighIn} />
-            <Blocks colors={colors} block={block} session={session} history={history} />
-            <History
-              colors={colors}
-              history={history}
-              units={profile.units}
-              mobility={mobility}
-              walks={walks}
-              onOpen={(h) => setOpenKey({ block: h.block, idx: h.idx })}
-              onBackfill={() => navigation.navigate("Backfill")}
-            />
+            <ProgressSeg value={tab} onChange={setTab} />
+
+            {tab === "overview" ? (
+              <>
+                <Overview colors={colors} history={history} streak={streak} units={profile.units} />
+                <WeekChart colors={colors} history={history} />
+                <BiggestMovesCard colors={colors} history={history} units={profile.units} />
+                <RecapCard recap={weekRecap(history, mobility, walks, 0)} label="This week" units={profile.units} />
+                <RecapCard recap={weekRecap(history, mobility, walks, 1)} label="Last week" units={profile.units} />
+                <TagsCard colors={colors} history={history} />
+                <ClosestMilestonesCard milestones={milestones} />
+                <MilestonesCard milestones={milestones} />
+              </>
+            ) : tab === "lifts" ? (
+              <Lifts colors={colors} history={history} units={profile.units} onOpen={setOpenLift} />
+            ) : tab === "body" ? (
+              <Body
+                colors={colors}
+                weighins={weighins}
+                units={profile.units}
+                onLog={appState.commitWeighIn}
+                onUpdate={appState.updateWeighIn}
+                onOpen={setOpenWeighInId}
+              />
+            ) : (
+              <>
+                <Blocks colors={colors} block={block} session={session} history={history} />
+                <History
+                  colors={colors}
+                  history={history}
+                  units={profile.units}
+                  mobility={mobility}
+                  walks={walks}
+                  onOpen={(h) => setOpenKey({ block: h.block, idx: h.idx })}
+                  onBackfill={() => navigation.navigate("Backfill")}
+                />
+              </>
+            )}
           </>
         )}
       </ScrollView>
       <SessionDetailSheet entry={openEntry} units={profile.units} history={history} onClose={() => setOpenKey(null)} />
       <MovementDetailSheet name={openLift} history={history} units={profile.units} onClose={() => setOpenLift(null)} />
+      <WeighInDetailSheet entry={openWeighIn} units={profile.units} onClose={() => setOpenWeighInId(null)} />
     </SafeAreaView>
   );
 }
 
-function EmptyState({ colors }: { colors: ReturnType<typeof useTheme>["colors"] }) {
+// Ports the prototype's #progSeg segmented control (spec/prototype.html), matching
+// the same pill-toggle pattern SettingsScreen's theme-mode Seg<T> already uses —
+// there wasn't a shared component to import (Seg<T> is private to SettingsScreen.tsx),
+// so this is a local equivalent sized for four full-width segments.
+function ProgressSeg({ value, onChange }: { value: ProgressTab; onChange: (v: ProgressTab) => void }) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.seg, { backgroundColor: colors.sunken }]}>
+      {PROGRESS_TABS.map((o) => {
+        const on = value === o.v;
+        return (
+          <TouchableOpacity
+            activeOpacity={0.7}
+            key={o.v}
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              onChange(o.v);
+            }}
+            style={[styles.segBtn, on && { backgroundColor: colors.raised }]}
+          >
+            <Text style={{ color: on ? colors.ink : colors.muted, fontFamily: fonts.bodyBold, fontSize: 12 }}>{o.l}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+function EmptyState({
+  colors,
+  movementBank,
+  block,
+  profile,
+}: {
+  colors: ReturnType<typeof useTheme>["colors"];
+  movementBank: ReturnType<typeof useAppState>["movementBank"];
+  block: number;
+  profile: ReturnType<typeof useAppState>["profile"];
+}) {
   const rows = [
     { k: "After session 1", s: "Your starting weights, and the first milestone ticked.", badge: "Today" },
-    { k: "After session 4", s: "The same session again, side by side with the first.", badge: "Week 2" },
+    {
+      k: "After session 4",
+      s: "The same session again, side by side with the first. This is the one people screenshot.",
+      badge: "Week 2",
+    },
+    { k: "After week 2", s: "Patterns: what the app notices in your notes, tags and ratings.", badge: "Week 2" },
     { k: "Every Sunday", s: "A recap: sessions, weight moved, what went up.", badge: "Weekly" },
+    { k: "Whenever you want", s: "Body weight and progress photos. Both optional, both private.", badge: "Optional" },
   ];
+  const s0 = buildSessionForProfile(movementBank, block, 0, profile);
   return (
-    <Card>
-      <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display }]}>Nothing here yet, on purpose</Text>
-      <Text style={[styles.note, { color: colors.muted, marginBottom: 12 }]}>
-        This tab fills itself in as you train. Here's what lands where.
-      </Text>
-      {rows.map((r, i) => (
-        <View key={r.k} style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.rowK, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>{r.k}</Text>
-            <Text style={[styles.rowSub, { color: colors.muted }]}>{r.s}</Text>
+    <>
+      <Card>
+        <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display }]}>Nothing here yet, on purpose</Text>
+        <Text style={[styles.note, { color: colors.muted, marginBottom: 12 }]}>
+          This tab fills itself in as you train. Here's what lands where.
+        </Text>
+        {rows.map((r, i) => (
+          <View key={r.k} style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowK, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>{r.k}</Text>
+              <Text style={[styles.rowSub, { color: colors.muted }]}>{r.s}</Text>
+            </View>
+            <View style={[styles.badge, { backgroundColor: i === 0 ? colors.accentSoft : colors.sunken }]}>
+              <Text style={{ color: i === 0 ? colors.accent : colors.muted, fontSize: 10.5, fontWeight: "700" }}>
+                {r.badge}
+              </Text>
+            </View>
           </View>
-          <View style={[styles.badge, { backgroundColor: colors.sunken }]}>
-            <Text style={{ color: colors.muted, fontSize: 10.5, fontWeight: "700" }}>{r.badge}</Text>
+        ))}
+      </Card>
+      <Card style={{ marginTop: spacing.md }}>
+        <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display }]}>Your first numbers</Text>
+        <Text style={[styles.note, { color: colors.muted, marginBottom: 4 }]}>
+          These five get logged today. Whatever you lift is the right starting point — it's a measurement, not a
+          test.
+        </Text>
+        {s0.moves.map((m, i) => (
+          <View
+            key={m.n}
+            style={[styles.rowBetween, { paddingVertical: 12 }, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}
+          >
+            <Text style={[styles.rowK, { color: colors.ink }]}>{m.n}</Text>
+            <Text style={{ color: colors.muted, fontSize: 13 }}>{m.spec}</Text>
+          </View>
+        ))}
+      </Card>
+      <Card style={{ marginTop: spacing.md }}>
+        <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display }]}>Closest milestone</Text>
+        <View style={styles.msNext}>
+          <View style={styles.rowBetween}>
+            <Text style={[styles.rowK, { color: colors.ink }]}>First session</Text>
+            <Text style={{ color: colors.muted, fontSize: 12 }}>1 to go</Text>
+          </View>
+          <View style={[styles.track, { backgroundColor: colors.sunken }]}>
+            <View style={[styles.fill, { backgroundColor: colors.accent, width: "0%" }]} />
           </View>
         </View>
-      ))}
-    </Card>
+      </Card>
+    </>
   );
 }
 
@@ -263,22 +385,33 @@ function Body({
   weighins,
   units,
   onLog,
+  onUpdate,
+  onOpen,
 }: {
   colors: ReturnType<typeof useTheme>["colors"];
   weighins: ReturnType<typeof useAppState>["weighins"];
   units: "imperial" | "metric";
   onLog: (entry: WeighIn) => void;
+  onUpdate: (id: string, w: number) => void;
+  onOpen: (id: string) => void;
 }) {
   const [input, setInput] = useState("");
   const u = unit(units);
   const wi = weeklyWeights(weighins);
   const alreadyThisWeek = weighedThisWeek(weighins);
 
+  // "Update this week" used to always push a new row (newWeighIn() mints a fresh id
+  // every time), even though the button says "update" — that mismatch was the actual
+  // source of duplicate weigh-ins, not just fat-fingering. Now it replaces whichever
+  // entry is already logged for the current week instead of appending a second one.
   const submit = () => {
     const v = Number(input);
     if (!(v > 0)) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    onLog(newWeighIn(v));
+    const thisWeek = weekKey(new Date());
+    const existing = weighins.find((w) => weekKey(w.date) === thisWeek);
+    if (existing) onUpdate(existing.id, v);
+    else onLog(newWeighIn(v));
     setInput("");
     Alert.alert("Logged.");
   };
@@ -343,15 +476,178 @@ function Body({
             .slice()
             .reverse()
             .map((w, i) => (
-              <View key={w.id} style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                key={w.id}
+                onPress={() => onOpen(w.id)}
+                style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}
+              >
                 <Text style={[styles.rowK, { color: colors.ink }]}>{fmtDate(w.date)}</Text>
                 <Text style={{ color: colors.ink, fontFamily: fonts.monoBold, fontSize: 13 }}>
-                  {w.w} {u}
+                  {w.w} {u} ›
                 </Text>
-              </View>
+              </TouchableOpacity>
             ))}
         </View>
       ) : null}
+    </Card>
+  );
+}
+
+// Ports the prototype's progTop (spec/prototype.html:2761) — the top 3 movements by
+// weight increase, biggest first.
+function BiggestMovesCard({
+  colors,
+  history,
+  units,
+}: {
+  colors: ReturnType<typeof useTheme>["colors"];
+  history: ReturnType<typeof useAppState>["history"];
+  units: "imperial" | "metric";
+}) {
+  const d = liftDeltas(history);
+  const names = Object.keys(d);
+  const u = unit(units);
+  const top = names
+    .map((n) => ({ n, ...d[n] }))
+    .filter((x) => x.delta > 0)
+    .sort((a, b) => b.delta - a.delta)
+    .slice(0, 3);
+  return (
+    <Card style={{ marginTop: spacing.md }}>
+      <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display }]}>Biggest moves</Text>
+      {top.length ? (
+        top.map((x, i) => (
+          <View key={x.n} style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}>
+            <Text style={[styles.rowK, { color: colors.ink }]}>{x.n}</Text>
+            <Text style={{ color: colors.good, fontFamily: fonts.monoBold, fontSize: 13 }}>
+              +{x.delta} {u}
+            </Text>
+          </View>
+        ))
+      ) : (
+        <Text style={[styles.note, { color: colors.muted }]}>
+          {names.length ? "Nothing has gone up yet. Session 4 is usually the first jump." : "Your first weights land here after session 1."}
+        </Text>
+      )}
+    </Card>
+  );
+}
+
+// Ports the prototype's progTags (spec/prototype.html:2830-2832) — session tags and
+// movement notes land here, counted the same way, sorted most-tagged first.
+function TagsCard({ colors, history }: { colors: ReturnType<typeof useTheme>["colors"]; history: ReturnType<typeof useAppState>["history"] }) {
+  const tags = tagCounts(history);
+  return (
+    <Card style={{ marginTop: spacing.md }}>
+      <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display }]}>What you've been tagging</Text>
+      {tags.length ? (
+        <>
+          <View style={styles.tagRow}>
+            {tags.map((t) => (
+              <View key={t.tag} style={[styles.tagBadge, { backgroundColor: colors.sunken }]}>
+                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>
+                  {t.tag} · {t.count}
+                </Text>
+              </View>
+            ))}
+          </View>
+          <Text style={[styles.note, { color: colors.muted, marginTop: 8 }]}>
+            Counts across every session. Two of the same thing is when the app starts saying something about it.
+          </Text>
+        </>
+      ) : (
+        <Text style={[styles.note, { color: colors.muted }]}>
+          Tags from the finish screen and movement notes land here. The more you tag, the more the app can tell you.
+        </Text>
+      )}
+    </Card>
+  );
+}
+
+// Ports the prototype's progNext (spec/prototype.html:2823-2828) — the three locked
+// milestones closest to being earned, by share of the target remaining.
+function ClosestMilestonesCard({ milestones }: { milestones: Milestone[] }) {
+  const { colors } = useTheme();
+  const locked = milestones.filter((x) => !x.on);
+  const next = locked
+    .slice()
+    .sort((a, b) => (a.at - a.cur) / a.at - (b.at - b.cur) / b.at)
+    .slice(0, 3);
+  return (
+    <Card style={{ marginTop: spacing.md }}>
+      <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display }]}>Closest milestones</Text>
+      {next.length ? (
+        next.map((x, i) => {
+          const pct = Math.max(0, Math.min(100, Math.round((x.cur / x.at) * 100)));
+          const left = x.at - x.cur;
+          return (
+            <View key={x.t} style={[styles.msNext, i > 0 && { marginTop: 12 }]}>
+              <View style={styles.rowBetween}>
+                <Text style={[styles.rowK, { color: colors.ink }]}>{x.t}</Text>
+                <Text style={{ color: colors.muted, fontSize: 12 }}>{left} to go</Text>
+              </View>
+              <View style={[styles.track, { backgroundColor: colors.sunken }]}>
+                <View style={[styles.fill, { backgroundColor: colors.accent, width: `${pct}%` }]} />
+              </View>
+            </View>
+          );
+        })
+      ) : (
+        <Text style={[styles.note, { color: colors.muted }]}>Every milestone earned. New ones appear as the numbers climb.</Text>
+      )}
+    </Card>
+  );
+}
+
+// Ports the prototype's progMilestones (spec/prototype.html:2834-2837). The "See all
+// N milestones" button is left as a clearly-labeled not-yet-built state rather than
+// silently wired to nothing — the prototype's full milestone-browser sub-screen
+// (SUB.milestones, grouped by category) wasn't part of what was asked for here.
+function MilestonesCard({ milestones }: { milestones: Milestone[] }) {
+  const { colors } = useTheme();
+  const earned = milestones.filter((x) => x.on);
+  const locked = milestones.filter((x) => !x.on);
+  return (
+    <Card style={{ marginTop: spacing.md }}>
+      <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display }]}>Milestones</Text>
+      <Text style={[styles.msCount, { color: colors.muted }]}>
+        {earned.length} of {milestones.length} earned
+      </Text>
+      {earned.length ? (
+        <View style={styles.tagRow}>
+          {earned
+            .slice()
+            .reverse()
+            .slice(0, 12)
+            .map((x) => (
+              <View key={x.t} style={[styles.tagBadge, { backgroundColor: colors.goodSoft }]}>
+                <Text style={{ color: colors.good, fontSize: 12, fontWeight: "700" }}>✓ {x.t}</Text>
+              </View>
+            ))}
+        </View>
+      ) : (
+        <Text style={[styles.note, { color: colors.muted, paddingVertical: 8 }]}>Your first one lands after session 1.</Text>
+      )}
+      {locked.length ? (
+        <>
+          <Text style={[styles.msCount, { color: colors.muted, marginTop: 14 }]}>Ahead of you</Text>
+          <View style={styles.tagRow}>
+            {locked.slice(0, 6).map((x) => (
+              <View key={x.t} style={[styles.tagBadge, { backgroundColor: colors.sunken }]}>
+                <Text style={{ color: colors.muted, fontSize: 12, fontWeight: "700" }}>{x.t}</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      ) : null}
+      <TouchableOpacity
+        activeOpacity={0.7}
+        style={[styles.ghostBtn, { borderColor: colors.line, marginTop: 14 }]}
+        onPress={() => Alert.alert("Coming soon", "The full milestone list isn't built yet — this card already shows what's earned and what's close.")}
+      >
+        <Text style={{ color: colors.ink, fontFamily: fonts.bodySemiBold, fontSize: 13 }}>See all {milestones.length} milestones</Text>
+      </TouchableOpacity>
     </Card>
   );
 }
@@ -515,6 +811,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   scroll: { padding: spacing.lg },
   title: { fontSize: type.displayPageTitle, letterSpacing: 0.5, marginBottom: 14 },
+  seg: { flexDirection: "row", borderRadius: 10, padding: 3, gap: 2, marginBottom: spacing.md },
+  segBtn: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 8 },
   sub: { fontSize: type.displaySub, letterSpacing: 0.5, marginBottom: 10 },
   note: { fontSize: type.note, lineHeight: 17 },
   row: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 12 },
@@ -538,4 +836,9 @@ const styles = StyleSheet.create({
   weighInput: { width: 100, padding: 12, borderRadius: 10, fontSize: 14 },
   weighBtn: { flex: 1, borderWidth: 1, borderRadius: 10, padding: 12, alignItems: "center" },
   eyebrowSmall: { fontSize: 11, textTransform: "uppercase", letterSpacing: 1, fontWeight: "700", marginBottom: 4 },
+  rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  msNext: {},
+  msCount: { fontSize: 12, fontWeight: "700", marginBottom: 8 },
+  track: { height: 6, borderRadius: 3, marginTop: 6, overflow: "hidden" },
+  fill: { height: "100%", borderRadius: 3 },
 });

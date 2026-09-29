@@ -27,6 +27,15 @@ export const LETTERS = ["A", "B", "C"] as const;
 export type Letter = (typeof LETTERS)[number];
 
 export const BLOCK_SESSIONS = 24;
+export const PRICE_ONE = 9;
+export const PRICE_THREE = 19;
+
+// state.owned in the prototype: 1 (block 1, free) plus however many blocks each
+// purchase actually grants — sums Purchase["blocks"], not purchase count, so a
+// "3 blocks for $19" purchase grants 3, not 1.
+export function ownedBlocks(purchases: { blocks: number }[]): number {
+  return 1 + purchases.reduce((a, p) => a + (p.blocks || 1), 0);
+}
 
 export const GYM: Record<Letter, BaseMovement[]> = {
   A: [
@@ -195,32 +204,48 @@ export const REP_STYLES = {
 } as const;
 export type RepStyleKey = keyof typeof REP_STYLES;
 
-export const firstDayGym: { title: string; body: string }[] = [
-  {
-    title: "What to wear",
-    body: "Anything you can move in. Trainers, not slides. Nobody is looking at your clothes, and that fear is the most common one there is.",
-  },
-  {
-    title: "What to bring",
-    body: "Water, your phone, and a towel if the gym asks for one. No belt, no gloves, no pre-workout.",
-  },
-  {
-    title: "When to go",
-    body: "Mid-morning and early afternoon are emptiest. If 5pm is your only option, go at 5pm. A busy gym just means more swaps, and the app has them.",
-  },
-  {
-    title: "Walking in",
-    body: "Ask at the desk where the changing rooms are, then find the first machine on your list. If you cannot find it, ask a staff member. It is the most normal question they get all day.",
-  },
-  {
-    title: "Using a machine",
-    body: "Adjust the seat before you load it. If someone is on it, tap Machine taken and do the swap instead. Asking how many sets they have left is completely normal.",
-  },
-  {
-    title: "When you are done",
-    body: "Wipe the machine down and put the dumbbells back. That is the whole etiquette.",
-  },
-];
+// Ported from the prototype's FIRST_DAY object (spec/prototype.html:2231) — one guide
+// per `where`, keyed to match lib/types.ts's Where union exactly.
+export const FIRST_DAY: Record<string, { title: string; body: string }[]> = {
+  gym: [
+    { title: "What to wear", body: "Anything you can move in. Trainers, not slides. Nobody is looking at your clothes, and that fear is the most common one there is." },
+    { title: "What to bring", body: "Water, your phone, and a towel if the gym asks for one. No belt, no gloves, no pre-workout." },
+    { title: "When to go", body: "Mid-morning and early afternoon are emptiest. If 5pm is your only option, go at 5pm. A busy gym just means more swaps, and the app has them." },
+    { title: "Walking in", body: "Ask at the desk where the changing rooms are, then find the first machine on your list. If you cannot find it, ask a staff member. It is the most normal question they get all day." },
+    { title: "Using a machine", body: "Adjust the seat before you load it. If someone is on it, tap Machine taken and do the swap instead. Asking how many sets they have left is completely normal." },
+    { title: "When you are done", body: "Wipe the machine down and put the dumbbells back. That is the whole etiquette." },
+  ],
+  garage: [
+    { title: "Set up first", body: "Clear enough space to lie down with your arms out, and put the dumbbells you need within reach before you start." },
+    { title: "What to wear", body: "Anything you can move in. Shoes on for anything standing." },
+    { title: "Safety", body: "Train where someone could hear you. Do not press anything overhead you could not set down safely on your own." },
+    { title: "When you are done", body: "Put things back where they were. It lowers the barrier for the next session." },
+  ],
+  home_db: [
+    { title: "Set up first", body: "Clear enough space to lie down with your arms out, and get your dumbbells within reach." },
+    { title: "What you need", body: "Two dumbbells and something to sit or lie on. A sturdy chair does everything a bench does here." },
+    { title: "Not enough weight?", body: "Do more reps and slow them down. A lighter weight moved properly beats a heavy one thrown." },
+    { title: "Noise", body: "If someone lives below you, put a towel down and control the lowering. That is better form anyway." },
+  ],
+  hotel: [
+    { title: "Set up first", body: "Clear a space by the bed. Most hotel gyms have dumbbells and a bench, which is all this program needs." },
+    { title: "If the gym is busy", body: "One person and two dumbbells is enough. Take them to your room." },
+    { title: "Travel weeks", body: "A shorter session beats a skipped one. Cut to two sets and keep the movements." },
+  ],
+  home_none: [
+    { title: "Set up first", body: "Clear enough space to lie down with your arms out. That is the entire setup." },
+    { title: "What to wear", body: "Anything. Shoes optional on the floor, on for anything standing." },
+    { title: "Harder than it looks", body: "Bodyweight work is about control, not speed. Slow the lowering half of every rep and it is plenty hard." },
+    { title: "If something is too hard", body: "Every movement has an easier version one tap away. Using it is the program working, not cheating." },
+  ],
+  outside: [
+    { title: "Where to go", body: "A bench, a step and a patch of grass covers everything in this session." },
+    { title: "What to bring", body: "Water, and a towel or mat for floor work." },
+    { title: "Weather", body: "Cold means a longer warm-up. Wet grass means swapping floor work for standing movements." },
+    { title: "Feeling watched", body: "Nobody at a park is watching. The ones who glance over are usually the people who have been thinking about starting too." },
+  ],
+};
+export const firstDayGym = FIRST_DAY.gym;
 
 export function unit(units: "imperial" | "metric") {
   return units === "metric" ? "kg" : "lb";
@@ -287,8 +312,14 @@ export type BuiltSession = {
 
 const PAIN_LABEL: Record<string, string> = { back: "lower back" };
 
-// prototype's buildSession(), including the pain-substitution step.
+// prototype's buildSession(), including the pain-substitution step. `bank` is
+// the movement library to build from — normally the app's fetched-from-Supabase
+// content (AppState.movementBank), falling back to this file's own GYM constant
+// only if that fetch (and its local cache) both come up empty. Threaded through
+// as a parameter rather than read from the module scope so this stays a pure
+// function of its inputs, same as the rest of this file.
 export function buildSession(
+  bank: Record<Letter, BaseMovement[]>,
   block: number,
   idx: number,
   lengthMin: number,
@@ -298,7 +329,7 @@ export function buildSession(
   const letter = LETTERS[idx % 3];
   const week = weekOf(idx);
   const sets = setsFor(block, week, lengthMin);
-  const moves: SessionMovement[] = GYM[letter].map((m) => {
+  const moves: SessionMovement[] = (bank[letter] || []).map((m) => {
     let mv: BaseMovement = { ...m };
     let swappedFor: string | null = null;
     pain.forEach((p) => {

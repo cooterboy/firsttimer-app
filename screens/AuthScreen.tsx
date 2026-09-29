@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -11,7 +12,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../lib/haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
@@ -28,6 +29,7 @@ export default function AuthScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [age, setAge] = useState("");
   const [units, setUnits] = useState<Profile["units"]>("imperial");
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -41,17 +43,20 @@ export default function AuthScreen() {
   const [resetSent, setResetSent] = useState(false);
 
   const submitSignUp = async () => {
+    Keyboard.dismiss();
     Haptics.selectionAsync().catch(() => {});
     setError("");
     if (!name.trim()) return setError("What should we call you?");
     if (!email.includes("@")) return setError("That email doesn't look right.");
     if (password.length < 8) return setError("8 characters or more.");
+    const ageNum = Number(age);
+    if (!(ageNum >= 13)) return setError("First Timer is for people 13 and up.");
     setBusy(true);
     try {
-      const { error: err, needsEmailConfirm } = await appState.signUp(email.trim().toLowerCase(), password, name.trim(), units);
+      const { error: err, needsEmailConfirm } = await appState.signUp(email.trim().toLowerCase(), password, name.trim(), units, ageNum);
       if (err) return setError(err);
       if (needsEmailConfirm) setMode("checkEmail");
-    } catch (e) {
+    } catch {
       setError("Couldn't reach the server. Check your connection and try again.");
     } finally {
       setBusy(false);
@@ -65,7 +70,7 @@ export default function AuthScreen() {
     try {
       const { error: err } = await appState.signIn(siEmail.trim().toLowerCase(), siPassword);
       if (err) setSiError(err);
-    } catch (e) {
+    } catch {
       setSiError("Couldn't reach the server. Check your connection and try again.");
     } finally {
       setBusy(false);
@@ -79,7 +84,7 @@ export default function AuthScreen() {
       const { error: err } = await appState.resetPassword(siEmail.trim().toLowerCase());
       if (err) setSiError(err);
       else setResetSent(true);
-    } catch (e) {
+    } catch {
       setSiError("Couldn't reach the server. Check your connection and try again.");
     } finally {
       setBusy(false);
@@ -171,6 +176,17 @@ export default function AuthScreen() {
               <Text style={[styles.note, { color: colors.muted }]}>
                 Your progress is saved to your account and there on any phone you sign in on.
               </Text>
+
+              <Field label="Age">
+                <TextInput
+                  value={age}
+                  onChangeText={setAge}
+                  placeholder="29"
+                  keyboardType="number-pad"
+                  placeholderTextColor={colors.muted}
+                  style={[styles.input, { color: colors.ink, backgroundColor: colors.sunken }]}
+                />
+              </Field>
 
               <Text style={[styles.fieldLabel, { color: colors.muted }]}>UNITS</Text>
               <View style={styles.seg}>

@@ -49,14 +49,25 @@ export default function YouScreen() {
             <Text style={[styles.tileLabel, { color: colors.muted }]}>Block</Text>
           </Card>
           <Card style={styles.tile}>
-            <Text style={[styles.tileNum, { color: colors.ink, fontFamily: fonts.display }]}>Free</Text>
-            <Text style={[styles.tileLabel, { color: colors.muted }]}>Plan</Text>
+            <Text style={[styles.tileNum, { color: colors.ink, fontFamily: fonts.display }]}>
+              {appState.purchases.length ? 1 + appState.purchases.length : "Free"}
+            </Text>
+            <Text style={[styles.tileLabel, { color: colors.muted }]}>
+              {appState.purchases.length ? "Blocks owned" : "Plan"}
+            </Text>
           </Card>
         </View>
 
         <Text style={[styles.eyebrow, { color: colors.muted }]}>TRAINING</Text>
         <Card style={{ padding: 0, overflow: "hidden" }}>
-          <TouchableOpacity activeOpacity={0.7} style={styles.item} onPress={() => navigation.navigate("TrainingPreferences")}>
+          <TouchableOpacity activeOpacity={0.7} style={[styles.item, { borderBottomWidth: 1, borderBottomColor: colors.line }]} onPress={() => navigation.navigate("FirstDay")}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Your first day</Text>
+              <Text style={[styles.itemSub, { color: colors.muted }]}>What to wear, what to bring, walking in</Text>
+            </View>
+            <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.7} style={[styles.item, { borderBottomWidth: 1, borderBottomColor: colors.line }]} onPress={() => navigation.navigate("TrainingPreferences")}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>
                 Training preferences
@@ -67,10 +78,55 @@ export default function YouScreen() {
             </View>
             <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
           </TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.7} style={[styles.item, { borderBottomWidth: 1, borderBottomColor: colors.line }]} onPress={() => navigation.navigate("FindGym")}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Find a gym near you</Text>
+              <Text style={[styles.itemSub, { color: colors.muted }]}>
+                {profile.where === "gym" ? "Studios, classes, a second gym" : "Ready to try a gym? Start here."}
+              </Text>
+            </View>
+            <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.7} style={[styles.item, { borderBottomWidth: 1, borderBottomColor: colors.line }]} onPress={() => navigation.navigate("Recovery")}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Need recovery?</Text>
+              <Text style={[styles.itemSub, { color: colors.muted }]}>What helps first, then places near you</Text>
+            </View>
+            <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.7} style={styles.item} onPress={() => navigation.navigate("Friends")}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Friends</Text>
+              <Text style={[styles.itemSub, { color: colors.muted }]}>
+                {appState.profile.friendsOptIn
+                  ? `${appState.friends.length} friend${appState.friends.length === 1 ? "" : "s"} · sharing on`
+                  : "Off · opt in to share"}
+              </Text>
+            </View>
+            <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
+          </TouchableOpacity>
         </Card>
 
         <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.lg }]}>APP</Text>
         <Card style={{ padding: 0, overflow: "hidden" }}>
+          <TouchableOpacity activeOpacity={0.7} style={[styles.item, { borderBottomWidth: 1, borderBottomColor: colors.line }]} onPress={() => navigation.navigate("Purchases")}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Purchases</Text>
+              <Text style={[styles.itemSub, { color: colors.muted }]}>
+                {appState.purchases.length ? `${1 + appState.purchases.length} blocks owned` : "Free · Block 1"}
+              </Text>
+            </View>
+            <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.7} style={[styles.item, { borderBottomWidth: 1, borderBottomColor: colors.line }]} onPress={() => navigation.navigate("ConnectedAccounts")}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Connected accounts</Text>
+              <Text style={[styles.itemSub, { color: colors.muted }]}>
+                {Object.values(appState.connectedAccounts).some(Boolean) ? "Connected" : "None yet"}
+              </Text>
+            </View>
+            <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
+          </TouchableOpacity>
           <TouchableOpacity activeOpacity={0.7} style={[styles.item, { borderBottomWidth: 1, borderBottomColor: colors.line }]} onPress={() => navigation.navigate("Settings")}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Settings</Text>
@@ -100,6 +156,22 @@ export default function YouScreen() {
             onPress={() => navigation.navigate("Terms")}
           >
             <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Terms of use</Text>
+            <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            style={[styles.item, { borderBottomWidth: 1, borderBottomColor: colors.line }]}
+            onPress={() => navigation.navigate("Help")}
+          >
+            <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Help & support</Text>
+            <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            style={[styles.item, { borderBottomWidth: 1, borderBottomColor: colors.line }]}
+            onPress={() => navigation.navigate("About")}
+          >
+            <Text style={[styles.itemTitle, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>About</Text>
             <Text style={[styles.itemChev, { color: colors.muted }]}>›</Text>
           </TouchableOpacity>
           <View style={[styles.item, { borderBottomWidth: 0 }]}>

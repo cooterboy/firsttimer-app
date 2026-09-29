@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Modal, ScrollView, Share, Text, TouchableOpacity, View, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../lib/haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, radius, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";

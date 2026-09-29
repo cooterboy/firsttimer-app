@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Alert, Text, TextInput, TouchableOpacity, View, StyleSheet } from "react-native";
-import * as Haptics from "expo-haptics";
+import { Text, TextInput, TouchableOpacity, View, StyleSheet } from "react-native";
+import * as Haptics from "../lib/haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import { HistoryEntry, HistoryMove, Units } from "../lib/types";
-import { fmtDate, prevFor, SESSION_TAGS, setsSummary } from "../lib/sessionEngine";
+import { fmtDate, MOVE_TAGS, prevFor, SESSION_TAGS } from "../lib/sessionEngine";
 import { unit } from "../lib/gymProgram";
 import Sheet from "./workout/Sheet";
 
@@ -47,11 +47,28 @@ export default function SessionDetailSheet({
   // Recomputes this movement's overall weight from its edited sets — same "max of
   // whatever's filled in" rule the live session uses — and pushes the whole moves
   // object (updateHistoryEntry patches at the HistoryEntry level, not per-movement).
-  const commitSetEdit = (n: string) => {
-    const setW = setEdits[n] || [];
+  // Takes setW directly rather than reading it back off setEdits state, and is called
+  // from onChangeText on every keystroke (not onBlur) — committing on blur raced the
+  // sheet's own unmount-on-close (tapping the backdrop to dismiss the keyboard closes
+  // the sheet and can tear down the TextInput before its blur handler runs), silently
+  // losing the edit.
+  const commitSetEdit = (n: string, setW: string[]) => {
     const nums = setW.map(Number).filter((v) => v > 0);
     const w = nums.length ? String(Math.max(...nums)) : "";
     const nextMoves = { ...entry.moves, [n]: { ...entry.moves[n], setW, w } };
+    appState.updateHistoryEntry(entry.block, entry.idx, { moves: nextMoves });
+  };
+
+  // Per-movement tags ("Joint ache" etc.) were only ever editable while the movement
+  // was still active in the live session (WorkoutSheets.tsx's note sheet) — there was
+  // no way to undo a mis-tap after the session logged. These feed recoverySignal()'s
+  // "ache" count (lib/sessionEngine.ts), which can now trigger a real mobility swap and
+  // doctor/trainer escalation, so a stuck bad tag needed a fix path after the fact too.
+  const toggleMoveTag = (n: string, t: string) => {
+    Haptics.selectionAsync().catch(() => {});
+    const cur = entry.moves[n].mtags || [];
+    const mtags = cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t];
+    const nextMoves = { ...entry.moves, [n]: { ...entry.moves[n], mtags } };
     appState.updateHistoryEntry(entry.block, entry.idx, { moves: nextMoves });
   };
 
@@ -97,10 +114,10 @@ export default function SessionDetailSheet({
                         setSetEdits((prevState) => {
                           const next = [...(prevState[n] || [])];
                           next[si] = t;
+                          commitSetEdit(n, next);
                           return { ...prevState, [n]: next };
                         })
                       }
-                      onBlur={() => commitSetEdit(n)}
                       keyboardType="decimal-pad"
                       style={[styles.setInput, { color: colors.ink, backgroundColor: colors.sunken }]}
                     />
@@ -115,6 +132,26 @@ export default function SessionDetailSheet({
                   {{ easy: "felt easy", right: "about right", hard: "felt hard" }[m.feel] || ""}
                 </Text>
               ) : null}
+              <View style={styles.moveTagWrap}>
+                {MOVE_TAGS.map((t) => {
+                  const on = (m.mtags || []).includes(t);
+                  return (
+                    <TouchableOpacity
+                      key={t}
+                      activeOpacity={0.7}
+                      onPress={() => toggleMoveTag(n, t)}
+                      style={[
+                        styles.moveTagPill,
+                        { borderColor: on ? colors.ink : colors.line, backgroundColor: on ? colors.ink : colors.raised },
+                      ]}
+                    >
+                      <Text style={{ color: on ? colors.paper : colors.muted, fontSize: 11, fontFamily: fonts.bodySemiBold }}>
+                        {t}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
             {delta ? (
               <View
@@ -226,6 +263,8 @@ const styles = StyleSheet.create({
   setEditRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" },
   setInput: { width: 56, textAlign: "center", padding: 8, borderRadius: 8, fontSize: 14 },
   deltaBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginTop: 2 },
+  moveTagWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
+  moveTagPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
   stars: { flexDirection: "row", gap: 8 },
   pillWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   pill: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 999, borderWidth: 1 },

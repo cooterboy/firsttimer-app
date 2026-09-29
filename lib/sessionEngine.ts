@@ -4,9 +4,11 @@
 // `state`/`wo`, since React state is owned by the screens that call these.
 
 import {
+  BaseMovement,
   BuiltSession,
   BLOCK_SESSIONS,
   GYM,
+  Letter,
   MovementVariant,
   buildSession as buildSessionData,
   daysPer,
@@ -82,8 +84,13 @@ export function bestEver(name: string, history: HistoryEntry[]): { w: number; da
 }
 
 // ---- building an active workout ----
-export function buildSessionForProfile(block: number, idx: number, profile: Profile): BuiltSession {
-  return buildSessionData(block, idx, profile.length, profile.reps, profile.pain);
+export function buildSessionForProfile(
+  bank: Record<Letter, BaseMovement[]>,
+  block: number,
+  idx: number,
+  profile: Profile
+): BuiltSession {
+  return buildSessionData(bank, block, idx, profile.length, profile.reps, profile.pain);
 }
 
 const warmupMovement = (profile: Profile): ActiveMove => ({
@@ -381,9 +388,14 @@ export function movedToday(real: ActiveMove[]): number {
   return Math.round(t);
 }
 
-export function nextPreview(block: number, session: number, profile: Profile): { title: string; moves: string } {
+export function nextPreview(
+  bank: Record<Letter, BaseMovement[]>,
+  block: number,
+  session: number,
+  profile: Profile
+): { title: string; moves: string } {
   if (session >= BLOCK_SESSIONS) return { title: "Block done", moves: "The next block picks up where this one ended." };
-  const s = buildSessionForProfile(block, session, profile);
+  const s = buildSessionForProfile(bank, block, session, profile);
   const nt = nextTrainingDay();
   return { title: `${nt.name} · Session ${session + 1} · ${s.letter}`, moves: s.moves.map((m) => m.n).join(" · ") };
 }
@@ -663,8 +675,7 @@ export function convertProfileWeight(weight: number | null, to: "imperial" | "me
 }
 
 // ---- nutrition card (prototype's "Recovery, in four lines") ----
-// No activity-level onboarding field yet, so this always uses the prototype's
-// fallback multiplier (1.45) rather than a per-person sedentary/active setting.
+const ACTIVITY_FACTOR: Record<string, number> = { sedentary: 1.35, light: 1.5, active: 1.65, back: 1.4 };
 const GOAL_CAL_ADJUST: Record<string, number> = { lose: -400, build: 250, energy: 0, habit: 0, confidence: 0, event: 150 };
 const GOAL_CAL_SUB: Record<string, string> = {
   lose: "About 400 under maintenance. Slow is what sticks.",
@@ -686,7 +697,7 @@ export function calorieRange(profile: Profile): [number, number] | null {
   const age = profile.age || 0;
   if (!kg || !cm || !age) return null;
   const base = 10 * kg + 6.25 * cm - 5 * age;
-  const act = 1.45;
+  const act = (profile.activity && ACTIVITY_FACTOR[profile.activity]) || 1.45;
   const adj = (profile.goal && GOAL_CAL_ADJUST[profile.goal]) || 0;
   const lo = (base - 161) * act + adj;
   const hi = (base + 5) * act + adj;
@@ -703,7 +714,6 @@ export type NutritionCard = {
 };
 
 export function nutritionCard(profile: Profile): NutritionCard {
-  const u = unit(profile.units);
   const kg = weightKg(profile.weight, profile.units);
   const pLo = profile.goal === "lose" ? 1.8 : 1.6;
   const pHi = 2.2;
@@ -719,13 +729,14 @@ export function nutritionCard(profile: Profile): NutritionCard {
 // Always targets the CURRENT pending session (block/session), same as the prototype —
 // there's exactly one session you could plausibly have missed logging: the next one up.
 export function buildBackfillEntry(
+  bank: Record<Letter, BaseMovement[]>,
   block: number,
   idx: number,
   profile: Profile,
   date: Date,
   weightsByMove: Record<string, string>
 ): HistoryEntry {
-  const built = buildSessionForProfile(block, idx, profile);
+  const built = buildSessionForProfile(bank, block, idx, profile);
   const moves: HistoryEntry["moves"] = {};
   built.moves.forEach((m) => {
     const w = (weightsByMove[m.n] || "").trim();
@@ -764,18 +775,118 @@ export function trainedToday(history: HistoryEntry[]): boolean {
   });
 }
 
+export function trainedYesterday(history: HistoryEntry[]): boolean {
+  const k = new Date();
+  k.setHours(0, 0, 0, 0);
+  k.setDate(k.getDate() - 1);
+  return history.some((h) => {
+    const d = new Date(h.date);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() === k.getTime();
+  });
+}
+
 // ---- comeback: "been a minute" (prototype's isComeback/daysAway) ----
 export const AWAY_DAYS = 10;
 export function daysAway(lastDate: string | null): number {
   return lastDate ? Math.floor((Date.now() - new Date(lastDate).getTime()) / 86400000) : 0;
 }
-export function isComeback(history: HistoryEntry[], lastDate: string | null): boolean {
-  return history.length > 0 && daysAway(lastDate) >= AWAY_DAYS;
+export function isComeback(
+  history: HistoryEntry[],
+  lastDate: string | null,
+  paused = false,
+  recoveryAdjustedAt: string | null = null
+): boolean {
+  const gap = daysAway(lastDate) - recoveryProtectedDays(lastDate, recoveryAdjustedAt);
+  return history.length > 0 && gap >= AWAY_DAYS && !paused;
 }
 // prototype's `lighter(w)`: ~15% lighter for one session back, rounded to a step.
 export function comebackWeight(w: number, units: Profile["units"]): number {
   const st = step(units);
   return Math.max(st, Math.round((w * 0.85) / st) * st);
+}
+
+// ---- recovery signal (shared by RecoveryScreen's soreness read and the recovery
+// escalation on Today — one tag-threshold system, not two separate detectors) ----
+export const RECOVERY_COOLDOWN_DAYS = 3;
+// Deliberate divergence from the prototype (which has no such gate, spec/prototype.html:3270-3272):
+// once "hot" started driving a real mobility swap + reschedule + doctor/trainer escalation
+// instead of just a copy change, triggering it off someone's 1st or 2nd session (possible
+// before this gate, since `ache` counts tagged movements, not sessions) was too aggressive
+// a call to make on that little data. Product decision, not a bug fix.
+export const RECOVERY_MIN_SESSIONS = 5;
+
+export type RecoverySignal = { hot: boolean; ache: number; sore: number };
+
+export function recoverySignal(history: HistoryEntry[]): RecoverySignal {
+  const recent = history.slice(-6);
+  const sore = recent.filter((h) => (h.tags || []).includes("Sore going in")).length;
+  const ache = recent.reduce(
+    (a, h) => a + Object.keys(h.moves).filter((n) => (h.moves[n].mtags || []).includes("Joint ache")).length,
+    0
+  );
+  const enoughHistory = history.length >= RECOVERY_MIN_SESSIONS;
+  return { hot: enoughHistory && (ache >= 2 || sore >= 3), ache, sore };
+}
+
+// Same shape and window as recoverySignal() above, reusing RECOVERY_MIN_SESSIONS
+// rather than a near-duplicate constant — the one new pattern the "Noticed" section
+// adds on top of recovery/plateau (see TodayScreen.tsx).
+export type TiredSignal = { tired: boolean; count: number };
+
+export function tiredSignal(history: HistoryEntry[]): TiredSignal {
+  const recent = history.slice(-6);
+  const count = recent.filter((h) => (h.tags || []).includes("Tired")).length;
+  const enoughHistory = history.length >= RECOVERY_MIN_SESSIONS;
+  return { tired: enoughHistory && count >= 3, count };
+}
+
+// Whether a recovery adjustment (profile.recoveryAdjustedAt) is still inside its
+// cooldown window — the plan days that get a suggested mobility swap instead of the
+// scheduled lifting session. Once this returns false, the caller re-checks
+// recoverySignal(): still hot means escalate, otherwise the adjustment clears.
+export function recoveryCooldownActive(recoveryAdjustedAt: string | null): boolean {
+  if (!recoveryAdjustedAt) return false;
+  const days = (Date.now() - new Date(recoveryAdjustedAt).getTime()) / 86400000;
+  return days >= 0 && days < RECOVERY_COOLDOWN_DAYS;
+}
+
+// How many of the days between lastDate and now fall inside the (bounded, 3-day)
+// recovery cooldown window — those were the app's own suggestion to skip lifting, not
+// a lapse, so the comeback/streak-reset gap check below excludes them. Only the
+// original cooldown window counts, even if recoveryAdjustedAt is still set much later
+// because the signal escalated (still hot after the cooldown) — this never grows into
+// an open-ended exemption. Never used for daysAway()'s literal "N days away" display,
+// only for the >= AWAY_DAYS decision.
+export function recoveryProtectedDays(lastDate: string | null, recoveryAdjustedAt: string | null): number {
+  if (!lastDate || !recoveryAdjustedAt) return 0;
+  const windowStart = new Date(recoveryAdjustedAt).getTime();
+  const windowEnd = windowStart + RECOVERY_COOLDOWN_DAYS * 86400000;
+  const overlapStart = Math.max(windowStart, new Date(lastDate).getTime());
+  const overlapEnd = Math.min(windowEnd, Date.now());
+  return Math.max(0, (overlapEnd - overlapStart) / 86400000);
+}
+
+// ---- plateau signal (same pattern as recoverySignal() above: a pure, derived read of
+// history, no persisted state, reused by both the detection and the suggestion it
+// drives) ----
+export const PLATEAU_MIN_SESSIONS = 4;
+
+export type PlateauSignal = { plateaued: boolean; sessions: number };
+
+// A movement is plateaued if its logged top-set weight (HistoryMove.w — already "max of
+// whatever's filled in", see SessionDetailSheet's commitSetEdit) hasn't gone up across
+// its last PLATEAU_MIN_SESSIONS occurrences, and neither the session ("Easy day") nor
+// the movement itself (feel === "easy") was ever tagged easy in that stretch — someone
+// genuinely coasting through it isn't stuck, they just haven't been pushed yet.
+export function plateauSignal(history: HistoryEntry[], name: string): PlateauSignal {
+  const occurrences = history.filter((h) => h.moves[name] && h.moves[name].type === "weight" && h.moves[name].w);
+  if (occurrences.length < PLATEAU_MIN_SESSIONS) return { plateaued: false, sessions: occurrences.length };
+  const recent = occurrences.slice(-PLATEAU_MIN_SESSIONS);
+  const weights = recent.map((h) => Number(h.moves[name].w) || 0);
+  const everIncreased = weights.some((w, i) => i > 0 && w > weights[i - 1]);
+  const feltEasy = recent.some((h) => (h.tags || []).includes("Easy day") || h.moves[name].feel === "easy");
+  return { plateaued: !everIncreased && !feltEasy, sessions: occurrences.length };
 }
 
 // ---- mobility day (prototype's mobilityDue/mobilityToday) ----
@@ -989,4 +1100,249 @@ export type ExportSnapshot = {
 export function historyJson(snapshot: Omit<ExportSnapshot, "exportedAt">): string {
   const full: ExportSnapshot = { exportedAt: new Date().toISOString(), ...snapshot };
   return JSON.stringify(full, null, 2);
+}
+
+// ---- daily opener splash (prototype's opener()/showOpener(), spec/prototype.html:1424-1464) ----
+// A once-a-day date key, local time — matches the prototype's dayKey().
+export function dayKey(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+const OWN_LINES: [string, string][] = [
+  ["Show up.", "It adds up."],
+  ["Today is a measurement.", "Not a test."],
+  ["Same weight, better form,", "is still progress."],
+  ["Consistency first.", "Load second."],
+  ["Finishing beats", "doing it perfectly."],
+  ["Nobody in here is", "thinking about you."],
+];
+
+export type OpenerCopy = { big: string; sub: string };
+
+export function openerCopy(params: {
+  history: HistoryEntry[];
+  streak: number;
+  session: number;
+  block: number;
+  lastDate: string | null;
+  paused: boolean;
+  isPlanDay: boolean;
+  mobility: MobilityEntry[];
+  mobilitySetting: Settings["mobility"];
+  name: string;
+  recoveryAdjustedAt?: string | null;
+}): OpenerCopy {
+  const { history, streak, session, block, lastDate, paused, isPlanDay, mobility, mobilitySetting, name, recoveryAdjustedAt } = params;
+  const done = history.length;
+  const nt = nextTrainingDay();
+  const days = daysPer();
+  const inWeek = session % days;
+  if (!done) return { big: "Everyone starts here.", sub: name ? `Morning, ${name}. Session one is waiting.` : "Session one is waiting." };
+  if (isComeback(history, lastDate, paused, recoveryAdjustedAt ?? null)) return { big: "Been a minute.", sub: "Pick it up exactly where you left it." };
+  if (session >= BLOCK_SESSIONS) return { big: `Block ${block} done.`, sub: `${BLOCK_SESSIONS} sessions. Most people never get past three.` };
+  if (trainedToday(history)) return { big: "Done for today.", sub: `See you ${nt.name}.` };
+  const nextStreakTier = [3, 5, 10, 20, 50].find((v) => streak === v - 1);
+  if (nextStreakTier) return { big: `One more and it's ${nextStreakTier}.`, sub: `${streak} in a row right now.` };
+  const nextSessTier = [5, 10, 25, 50, 100].find((v) => done === v - 1);
+  if (nextSessTier) return { big: `One more and it's ${nextSessTier}.`, sub: `${done} sessions logged.` };
+  if (streak >= 3) return { big: `${streak} in a row.`, sub: "Keep it boring and it keeps working." };
+  if (!isPlanDay && mobilityDue(mobility, mobilitySetting)) return { big: "Nothing today.", sub: "That's the plan. Muscle is built between sessions." };
+  if (!isPlanDay) return { big: "Rest day.", sub: `Next one is ${nt.name}. A walk still counts.` };
+  if (inWeek === 0) return { big: "First one of the week.", sub: "The hardest one to start is this one." };
+  if (inWeek === days - 1) return { big: `Last of the ${days}.`, sub: "Then the week's done." };
+  if (done < 6) return { big: "You're up.", sub: `Session ${session + 1}. It gets familiar fast.` };
+  const own = OWN_LINES[(done + new Date().getDate()) % OWN_LINES.length];
+  return { big: own[0], sub: own[1] };
+}
+
+// ---- weekly recap splash (prototype's weekRecap()/showWeekRecap(), spec/prototype.html:2319-2344) ----
+export type WeekRecap = {
+  start: number;
+  sessions: number;
+  target: number;
+  mobility: number;
+  walks: number;
+  walkMin: number;
+  activeDays: number;
+  moved: number;
+  ups: string[];
+  avg: number | null;
+  topTag: string | undefined;
+  minutes: number;
+};
+
+export function weekRecap(
+  history: HistoryEntry[],
+  mobility: MobilityEntry[],
+  walks: WalkEntry[],
+  offsetWeeks: number
+): WeekRecap {
+  const wk = weekKey(new Date()) - offsetWeeks * 7 * 86400000;
+  const end = wk + 7 * 86400000;
+  const inRange = (iso: string) => {
+    const t = new Date(iso).getTime();
+    return t >= wk && t < end;
+  };
+  const sess = history.filter((h) => inRange(h.date));
+  const mob = mobility.filter((m) => inRange(m.date));
+  const wks = walks.filter((w) => inRange(w.date));
+  let moved = 0;
+  const ups: string[] = [];
+  sess.forEach((h) =>
+    Object.keys(h.moves).forEach((n) => {
+      const m = h.moves[n];
+      if (m.type !== "weight") return;
+      const vals = m.setW && m.setW.length ? m.setW : [m.w];
+      vals.forEach((v) => {
+        moved += (m.reps || 10) * (Number(v) || 0);
+      });
+      const prev = prevFor(n, h.block, h.idx, history);
+      if (prev && prev.w && m.w && Number(m.w) > Number(prev.w)) {
+        ups.push(`${n} +${Math.round((Number(m.w) - Number(prev.w)) * 10) / 10}`);
+      }
+    })
+  );
+  const ratings = sess.filter((h) => h.rating).map((h) => h.rating as number);
+  const avg = ratings.length ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10 : null;
+  const tagCounts: Record<string, number> = {};
+  sess.forEach((h) => (h.tags || []).forEach((t) => (tagCounts[t] = (tagCounts[t] || 0) + 1)));
+  const topTag = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a])[0];
+  const minutes = sess.reduce((a, h) => a + (h.minutes || 0), 0);
+  const days = new Set<string>();
+  [sess, mob, wks].forEach((arr) => arr.forEach((x) => days.add(new Date(x.date).toDateString())));
+  return {
+    start: wk,
+    sessions: sess.length,
+    target: daysPer(),
+    mobility: mob.length,
+    walks: wks.length,
+    walkMin: wks.reduce((a, w) => a + (w.minutes || 0), 0),
+    activeDays: days.size,
+    moved: Math.round(moved),
+    ups,
+    avg,
+    topTag,
+    minutes,
+  };
+}
+
+// Reuses weekRecap()'s exact math and shape (so RecapCard can render it unmodified)
+// for the "block finished" milestone, scoped to one block's sessions instead of a
+// calendar week. Mobility/walks aren't tied to a block — they're logged independently
+// of block/session position (see commitMobility's comment in lib/appState.tsx) — so
+// those stay at 0 here rather than guessing an attribution.
+export function blockRecap(history: HistoryEntry[], block: number): WeekRecap {
+  const sess = history.filter((h) => h.block === block);
+  let moved = 0;
+  const ups: string[] = [];
+  sess.forEach((h) =>
+    Object.keys(h.moves).forEach((n) => {
+      const m = h.moves[n];
+      if (m.type !== "weight") return;
+      const vals = m.setW && m.setW.length ? m.setW : [m.w];
+      vals.forEach((v) => {
+        moved += (m.reps || 10) * (Number(v) || 0);
+      });
+      const prev = prevFor(n, h.block, h.idx, history);
+      if (prev && prev.w && m.w && Number(m.w) > Number(prev.w)) {
+        ups.push(`${n} +${Math.round((Number(m.w) - Number(prev.w)) * 10) / 10}`);
+      }
+    })
+  );
+  const ratings = sess.filter((h) => h.rating).map((h) => h.rating as number);
+  const avg = ratings.length ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10 : null;
+  const tagCounts: Record<string, number> = {};
+  sess.forEach((h) => (h.tags || []).forEach((t) => (tagCounts[t] = (tagCounts[t] || 0) + 1)));
+  const topTag = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a])[0];
+  const minutes = sess.reduce((a, h) => a + (h.minutes || 0), 0);
+  return {
+    start: sess.length ? new Date(sess[0].date).getTime() : Date.now(),
+    sessions: sess.length,
+    target: BLOCK_SESSIONS,
+    mobility: 0,
+    walks: 0,
+    walkMin: 0,
+    activeDays: sess.length,
+    moved: Math.round(moved),
+    ups,
+    avg,
+    topTag,
+    minutes,
+  };
+}
+
+// ---- tag counts (prototype's progTags, spec/prototype.html:2830-2832) — every
+// session-level tag ("How was it?") and every movement-level tag (mtags) across all
+// history, same counting rule for both: a tap counts exactly like a written note.
+// Sorted by count descending, matching the prototype's badge order.
+export type TagCount = { tag: string; count: number };
+export function tagCounts(history: HistoryEntry[]): TagCount[] {
+  const tc: Record<string, number> = {};
+  history.forEach((h) => {
+    (h.tags || []).forEach((t) => (tc[t] = (tc[t] || 0) + 1));
+    Object.keys(h.moves).forEach((n) => (h.moves[n].mtags || []).forEach((t) => (tc[t] = (tc[t] || 0) + 1)));
+  });
+  return Object.keys(tc)
+    .sort((a, b) => tc[b] - tc[a])
+    .map((tag) => ({ tag, count: tc[tag] }));
+}
+
+// ---- milestones (prototype's ms/tier(), spec/prototype.html:2797-2820) — tiered so
+// they never run out; `on` is a plain cur>=at check, re-evaluated fresh every call, not
+// a stored "earned" flag. One prototype tier is deliberately not ported: progress
+// photos. There's no photo capture/upload feature anywhere in this app to source a
+// real photoCount from, and this port is existing-data-only — see CLAUDE.md/the task
+// that added this function.
+export type Milestone = { t: string; on: boolean; at: number; cur: number; label: string };
+
+function tier(vals: number[], fmt: (v: number) => string, label: string, cur: number): Milestone[] {
+  return vals.map((v) => ({ t: fmt(v), on: cur >= v, at: v, cur, label }));
+}
+
+export function milestoneList(
+  history: HistoryEntry[],
+  mobility: MobilityEntry[],
+  walks: WalkEntry[],
+  streak: number,
+  block: number,
+  units: Profile["units"]
+): Milestone[] {
+  const total = history.length;
+  const d = liftDeltas(history);
+  const names = Object.keys(d);
+  const prs = names.filter((n) => d[n].delta > 0).length;
+  const weekSet = new Set(history.map((h) => weekKey(h.date)));
+  const moved = historyMovedTotal(history);
+  const walkMin = walks.reduce((a, w) => a + (w.minutes || 0), 0);
+  const ratedCount = history.filter((h) => h.rating).length;
+  const movedTarget =
+    units === "metric"
+      ? [1000, 5000, 10000, 25000, 50000, 100000, 250000]
+      : [2500, 10000, 25000, 50000, 100000, 250000, 500000];
+  const u = unit(units);
+
+  return [
+    { t: "First session", on: total >= 1, at: 1, cur: total, label: "sessions" },
+    ...tier([5, 10, 25, 50, 100, 200, 365], (v) => `${v} sessions`, "sessions", total),
+    {
+      t: "First full week",
+      on: weekSet.size >= 1 && history.some((h) => (h.idx + 1) % daysPer() === 0),
+      at: 1,
+      cur: weekSet.size,
+      label: "weeks",
+    },
+    ...tier([4, 8, 12, 26, 52], (v) => `${v} weeks training`, "weeks", weekSet.size),
+    ...tier([3, 5, 10, 20, 50], (v) => `${v} in a row`, "streak", streak || 0),
+    { t: "A lift went up", on: prs >= 1, at: 1, cur: prs, label: "lifts up" },
+    ...tier([3, 5, 10], (v) => `${v} lifts improved`, "lifts up", prs),
+    ...tier(movedTarget, (v) => `${v >= 1000 ? v / 1000 + "k" : v} ${u} moved`, "moved", Math.round(moved)),
+    ...tier([1, 5, 10, 25], (v) => (v === 1 ? "First mobility day" : `${v} mobility days`), "mobility", mobility.length),
+    ...tier([1, 10, 25, 50, 100], (v) => (v === 1 ? "First walk logged" : `${v} walks or runs`), "walks", walks.length),
+    ...tier([60, 300, 1000, 3000], (v) => `${v} minutes moving`, "walkmin", walkMin),
+    ...tier([5, 20], (v) => `${v} sessions rated`, "rated", ratedCount),
+    ...tier([1, 2, 3, 4], (v) => `Block ${v} done`, "blocks", block - 1),
+  ];
 }

@@ -1,7 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Modal, ScrollView, Text, TouchableOpacity, View, StyleSheet } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Modal, Text, TouchableOpacity, View, StyleSheet } from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../lib/haptics";
+import { playBeep } from "../lib/sound";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, radius, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
@@ -9,6 +11,7 @@ import { mobilityMinutes, mobilitySteps } from "../lib/mobilityProgram";
 import { mobilityFinishCopy, newMobilityEntry, trainedToday } from "../lib/sessionEngine";
 import CelebrateRing from "../components/workout/CelebrateRing";
 import FadeSwitch from "../components/workout/FadeSwitch";
+import SwipeNav from "../components/workout/SwipeNav";
 import Sheet from "../components/workout/Sheet";
 
 type Result = { big: string; line: string; minutes: number; stretches: number; count: number };
@@ -16,7 +19,7 @@ type Result = { big: string; line: string; minutes: number; stretches: number; c
 export default function MobilityScreen({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { colors } = useTheme();
   const appState = useAppState();
-  const steps = useRef(mobilitySteps()).current;
+  const steps = useMemo(() => mobilitySteps(), []);
 
   const [i, setI] = useState(0);
   const [left, setLeft] = useState(steps[0].sec);
@@ -83,6 +86,25 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
     setPhase("finish");
   };
 
+  // Unlike WorkoutScreen's "Save & exit" — which works because an in-progress lifting
+  // session is already persisted continuously via appState.setActive and can be
+  // resumed — mobility has no such in-progress state, so there was no "save" half of
+  // "Exit" at all: leaving mid-stretch silently discarded everything, no matter how
+  // much was actually done. Given how short and low-stakes a mobility day is, partial
+  // credit (log whatever was completed, no resume) is the simpler fix that matches:
+  // logging a completed 2-minute mobility day is honest, and doesn't need a second
+  // persisted "active" state living alongside appState.active.
+  const hasProgress = i > 0 || started;
+  const saveAndExit = () => {
+    clearTick();
+    clearAdvanceTimeout();
+    if (hasProgress) {
+      const minutes = Math.max(1, Math.round((Date.now() - startedAtRef.current) / 60000));
+      appState.commitMobility(newMobilityEntry(minutes));
+    }
+    onClose();
+  };
+
   // Same timer restart quirk as the prototype: pausing freezes the number on screen,
   // but Resume always restarts the current stretch's full hold from the top rather
   // than continuing from where it was paused.
@@ -102,6 +124,7 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
   };
 
   const completeStep = () => {
+    playBeep();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     const next = i + 1;
     advanceTimeoutRef.current = setTimeout(() => {
@@ -184,14 +207,16 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
   const pct = Math.round((1 - left / step.sec) * 100);
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={saveAndExit}>
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
         <View style={styles.topBar}>
           <Text style={[styles.topLabel, { color: colors.muted, fontFamily: fonts.bodyBold }]} numberOfLines={1}>
             Mobility · {i + 1} of {steps.length}
           </Text>
-          <TouchableOpacity activeOpacity={0.7} onPress={onClose}>
-            <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 12 }}>Exit</Text>
+          <TouchableOpacity activeOpacity={0.7} onPress={saveAndExit}>
+            <Text style={{ color: colors.ink2, fontFamily: fonts.bodySemiBold, fontSize: 12 }}>
+              {hasProgress ? "Save & exit" : "Exit"}
+            </Text>
           </TouchableOpacity>
         </View>
         <View style={styles.dots}>
@@ -204,6 +229,7 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
         </View>
 
         <ScrollView contentContainerStyle={styles.body}>
+          <SwipeNav onSwipeLeft={goNext} onSwipeRight={goPrev}>
           <FadeSwitch id={i}>
             <View style={[styles.video, { backgroundColor: colors.ink }]}>
               <Text style={[styles.videoTitle, { color: colors.paper, fontFamily: fonts.display }]}>{step.n}</Text>
@@ -229,6 +255,7 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
               </TouchableOpacity>
             </View>
           </FadeSwitch>
+          </SwipeNav>
 
           <View style={styles.helperRow}>
             <TouchableOpacity activeOpacity={0.7}

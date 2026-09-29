@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from "react";
 import { Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { NavigationContainer } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
@@ -8,15 +9,18 @@ import { ThemeProvider, useTheme } from "./lib/ThemeContext";
 import { AppStateProvider, useAppState } from "./lib/appState";
 import { WorkoutModalProvider, useWorkoutModal } from "./lib/workoutModal";
 import { isSupabaseConfigured } from "./lib/supabase";
+import { configurePurchases, forgetPurchaser, identifyPurchaser } from "./lib/purchases";
 import { useAppFonts } from "./lib/fonts";
 import { fonts } from "./lib/theme";
 import AppNavigator from "./navigation/AppNavigator";
 import AuthScreen from "./screens/AuthScreen";
+import OnboardingScreen from "./screens/OnboardingScreen";
 import WorkoutScreen from "./screens/WorkoutScreen";
 import MobilityScreen from "./screens/MobilityScreen";
 import WalkScreen from "./screens/WalkScreen";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+configurePurchases();
 
 function MainApp() {
   const workoutModal = useWorkoutModal();
@@ -48,6 +52,14 @@ function Root() {
     hideSplash();
   }, [hideSplash]);
 
+  // Ties RevenueCat's customer identity to the same Supabase user id everywhere
+  // else in this app keys off of, so purchase receipts follow sign-in/sign-out the
+  // same way the rest of the account's data does.
+  useEffect(() => {
+    if (appState.userId) identifyPurchaser(appState.userId);
+    else forgetPurchaser();
+  }, [appState.userId]);
+
   if (!fontsReady || appState.authLoading) return null;
 
   if (!isSupabaseConfigured) {
@@ -68,9 +80,13 @@ function Root() {
     <View style={{ flex: 1, backgroundColor: colors.paper }}>
       <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       {appState.userId ? (
-        <WorkoutModalProvider>
-          <MainApp />
-        </WorkoutModalProvider>
+        appState.profile.medicalDisclaimerAccepted ? (
+          <WorkoutModalProvider>
+            <MainApp />
+          </WorkoutModalProvider>
+        ) : (
+          <OnboardingScreen onDone={() => {}} />
+        )
       ) : (
         <AuthScreen />
       )}
@@ -80,12 +96,14 @@ function Root() {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
         <AppStateProvider>
-          <Root />
+          <ThemeProvider>
+            <Root />
+          </ThemeProvider>
         </AppStateProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

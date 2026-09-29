@@ -1,5 +1,5 @@
 import React from "react";
-import Svg, { Circle, Path } from "react-native-svg";
+import Svg, { Circle, Path, Rect } from "react-native-svg";
 
 // Ported from the prototype's nav.tabs SVGs — same paths, same viewBox.
 export function TodayIcon({ color }: { color: string }) {
@@ -13,6 +13,21 @@ export function ProgressIcon({ color }: { color: string }) {
   return (
     <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8}>
       <Path d="M4 19h16M6 15l4-5 3 3 5-7" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+export function ProgramsIcon({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8}>
+      <Rect x={4} y={4} width={16} height={16} rx={3} />
+      <Path d="M8 9h8M8 13h8M8 17h5" strokeLinecap="round" />
+    </Svg>
+  );
+}
+export function ShopIcon({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8}>
+      <Path d="M6 8h12l1 12H5L6 8zM9 8a3 3 0 0 1 6 0" strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }

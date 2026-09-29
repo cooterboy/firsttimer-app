@@ -1,12 +1,13 @@
 import React from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../lib/haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
-import { PAIN_AREAS, PainArea, Where, WHERE_LABEL, painAreaLabel } from "../lib/types";
+import { buildSession } from "../lib/gymProgram";
+import { Goal, GOAL_LABEL, PAIN_AREAS, PainArea, Where, WHERE_LABEL, painAreaLabel } from "../lib/types";
 
 const LENGTHS: { v: number; l: string }[] = [
   { v: 30, l: "30" },
@@ -42,6 +43,16 @@ export default function TrainingPreferencesScreen() {
   const detail =
     length <= 30 ? "2 sets of everything." : length >= 60 ? "4 sets, 3 in your first week." : "3 sets, 2 in your first week.";
 
+  const nextSession = buildSession(
+    appState.movementBank,
+    appState.block,
+    appState.session,
+    appState.profile.length,
+    appState.profile.reps,
+    appState.profile.pain
+  );
+  const nextSessionPreview = nextSession.moves.slice(0, 3).map((m) => `${m.n} ${m.spec}`).join(" · ");
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
       <View style={styles.topBar}>
@@ -57,11 +68,15 @@ export default function TrainingPreferencesScreen() {
         <Text style={[styles.eyebrow, { color: colors.muted }]}>SCHEDULE</Text>
         <View style={[styles.group, { borderColor: colors.line }]}>
           <View style={styles.item}>
-            <Text style={{ color: colors.ink, fontSize: 14, fontFamily: fonts.bodyMedium }}>Training days</Text>
-            <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2, lineHeight: 16 }}>
-              Monday, Wednesday, Friday. Changing which days you train is a later build step — for now the plan is
-              fixed at 3 a week.
+            <Text style={{ color: colors.ink, fontSize: 14, fontFamily: fonts.bodyMedium, marginBottom: 4 }}>Training days</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 10, lineHeight: 16 }}>
+              Monday, Wednesday, Friday either way for now — a real 2-day week is a later build step, but your answer
+              here is saved.
             </Text>
+            <View style={styles.pillWrap}>
+              <Pill label="2 days" on={appState.profile.days === 2} onPress={() => appState.updateProfile({ days: 2 })} />
+              <Pill label="3 days" on={appState.profile.days === 3} onPress={() => appState.updateProfile({ days: 3 })} />
+            </View>
           </View>
           <View style={[styles.item, { borderTopWidth: 1, borderTopColor: colors.line }]}>
             <Text style={{ color: colors.ink, fontSize: 14, fontFamily: fonts.bodyMedium, marginBottom: 4 }}>
@@ -91,6 +106,16 @@ export default function TrainingPreferencesScreen() {
           </View>
         </View>
 
+        <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.lg }]}>SETS AND REPS</Text>
+        <View style={[styles.group, { borderColor: colors.line }]}>
+          <View style={styles.item}>
+            <Text style={{ color: colors.ink, fontSize: 14, fontFamily: fonts.bodyMedium, marginBottom: 4 }}>
+              What you'll do next session
+            </Text>
+            <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 16 }}>{nextSessionPreview}</Text>
+          </View>
+        </View>
+
         <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.lg }]}>WHERE AND WHAT</Text>
         <View style={[styles.group, { borderColor: colors.line }]}>
           <View style={styles.item}>
@@ -109,6 +134,21 @@ export default function TrainingPreferencesScreen() {
                     appState.updateProfile({ where: k });
                     appState.setActive(null);
                   }}
+                />
+              ))}
+            </View>
+          </View>
+          <View style={[styles.item, { borderTopWidth: 1, borderTopColor: colors.line }]}>
+            <Text style={{ color: colors.ink, fontSize: 14, fontFamily: fonts.bodyMedium }}>
+              Goal<Text style={{ color: colors.muted, fontFamily: fonts.body }}> · {GOAL_LABEL[appState.profile.goal as Goal] || "Not set"}</Text>
+            </Text>
+            <View style={[styles.pillWrap, { marginTop: 10 }]}>
+              {(Object.keys(GOAL_LABEL) as Goal[]).map((k) => (
+                <Pill
+                  key={k}
+                  label={GOAL_LABEL[k]}
+                  on={appState.profile.goal === k}
+                  onPress={() => appState.updateProfile({ goal: k })}
                 />
               ))}
             </View>
@@ -140,6 +180,30 @@ export default function TrainingPreferencesScreen() {
                   />
                 );
               })}
+            </View>
+          </View>
+        </View>
+
+        <Text style={[styles.eyebrow, { color: colors.muted, marginTop: spacing.lg }]}>TIME OFF</Text>
+        <View style={[styles.group, { borderColor: colors.line }]}>
+          <View style={styles.item}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ flex: 1, marginRight: 10 }}>
+                <Text style={{ color: colors.ink, fontSize: 14, fontFamily: fonts.bodyMedium, marginBottom: 2 }}>
+                  Pause my program
+                </Text>
+                <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 16 }}>
+                  Travel, illness, life. Your streak and your place in the block are frozen until you resume.
+                </Text>
+              </View>
+              <Switch
+                value={appState.settings.paused}
+                onValueChange={(v) => {
+                  Haptics.selectionAsync().catch(() => {});
+                  appState.updateSettings({ paused: v });
+                  Alert.alert(v ? "Paused." : "Back on.", v ? "Come back whenever." : undefined);
+                }}
+              />
             </View>
           </View>
         </View>

@@ -2,6 +2,14 @@ import { BaseMovement, Letter, MovementType, RepStyleKey } from "./gymProgram";
 
 export type Units = "imperial" | "metric";
 export type Goal = "lose" | "build" | "energy" | "habit" | "confidence" | "event";
+export const GOAL_LABEL: Record<Goal, string> = {
+  lose: "Lose fat",
+  build: "Build muscle",
+  energy: "Feel stronger day to day",
+  habit: "Build the habit",
+  confidence: "Feel at home in a gym",
+  event: "Training for an event",
+};
 // Matches the prototype's WHERE_LABEL keys. Only "gym" has its own movement bank
 // ported (lib/gymProgram.ts's GYM) — the others are real, settable choices (so the
 // data model and the UI aren't lying about what a beginner can pick), but session
@@ -24,6 +32,30 @@ export function painAreaLabel(k: PainArea): string {
   return k === "back" ? "Lower back" : k[0].toUpperCase() + k.slice(1);
 }
 
+// prototype's onboarding step 2 "Days a week" — collected and stored, but not yet
+// wired into daysPer()/planDays() (lib/gymProgram.ts:232-234, lib/sessionEngine.ts:41-44
+// are still hardcoded to the 3-day plan). Threading a real 2-day plan through the
+// session-building math (weeksPerBlock, rep progression, mobility scheduling) is a
+// separate, comparably-sized task — same deliberate-gap pattern as `Where` above.
+export type TrainingDays = 2 | 3;
+
+export type Activity = "sedentary" | "light" | "active" | "back";
+export const ACTIVITY_LABEL: Record<Activity, string> = {
+  sedentary: "Mostly sitting",
+  light: "Some movement",
+  active: "Already active",
+  back: "Coming back after a break",
+};
+
+export type Why = "self" | "health" | "date" | "kids" | "friend";
+export const WHY_LABEL: Record<Why, string> = {
+  self: "For me",
+  health: "A health check-up",
+  date: "A date on the calendar",
+  kids: "To keep up with my kids",
+  friend: "A friend talked me into it",
+};
+
 export type Profile = {
   name: string;
   units: Units;
@@ -35,7 +67,50 @@ export type Profile = {
   heightCm: number | null;
   weight: number | null; // in the profile's current `units`, like the prototype
   goal: Goal | null;
+  days: TrainingDays;
+  activity: Activity | null;
+  why: Why | null;
+  medicalDisclaimerAccepted: boolean;
+  // Account-level, single-value fields backed by their own `profiles` columns —
+  // moved here from Settings (which was jsonb) so they're real, individually
+  // queryable columns like everything else in Profile. See migration 008.
+  friendsOptIn: boolean;
+  boxCode: string; // a linked First Timer box code, if any (state.boxCode) — no
+  // real box/brand-partner backend exists, so linking here never actually
+  // unlocks anything; see ShopScreen's "not yet connected" copy.
+  city: string; // free-text city/zip for the Find-a-gym/Recovery map-search links
+  // Set the first time recoverySignal() flips "hot" (see lib/sessionEngine.ts). Plan
+  // days within RECOVERY_COOLDOWN_DAYS of this timestamp get a suggested mobility swap
+  // instead of the scheduled lifting session. Cleared once the signal is no longer hot
+  // after the cooldown; if it's still hot, the doctor/trainer escalation message shows
+  // instead of clearing it.
+  recoveryAdjustedAt: string | null;
 };
+
+// A friend added via code (state.friends.list + state.friends.bumps merged into
+// one row per friend — the prototype keeps them separate, but they're 1:1 here).
+export type Friend = {
+  id: string;
+  name: string;
+  code: string;
+  bumped: boolean;
+  date: string;
+};
+
+// A purchase record (state.purchases). Real payments don't exist yet — the only
+// writer today is the dev-only "Unlock" button on PlansScreen (label "Block N" /
+// "Blocks N–M", price 0), not a real transaction. `blocks` is how many blocks this
+// one purchase actually grants (1 for the single-block plan, 3 for the bundle) — see
+// lib/gymProgram.ts's ownedBlocks(), which sums this rather than counting records.
+export type Purchase = {
+  id: string;
+  label: string;
+  price: number;
+  blocks: number;
+  date: string;
+};
+
+export type AccentKey = "orange" | "green" | "blue" | "ink";
 
 export type Settings = {
   restDefault: number;
@@ -45,7 +120,17 @@ export type Settings = {
   weighin: boolean;
   reminders: boolean;
   remindTime: string; // "7:00 am" style, matches the prototype
+  mobilityReminder: boolean; // push for mobility day — only actually schedules if
+  // `mobility` (below) isn't "off"; see lib/notifications.ts
+  recapReminder: boolean; // push for the Sunday recap
   mobility: "weekly" | "biweekly" | "off";
+  accent: AccentKey;
+  sounds: boolean;
+  haptics: boolean;
+  quotes: boolean; // prototype's "Opening card" — the daily-opener splash
+  paused: boolean; // prototype's state.paused — "Pause my program"
+  openerSeen: string; // dayKey() of the last daily-opener splash shown
+  recapSeen: string; // weekKey() (as a string) of the last weekly-recap splash shown
 };
 
 // Ten timed stretches on a non-training day (prototype's state.mobility).

@@ -55,13 +55,31 @@ If a suggestion involves CRDTs, operational transforms or a sync library, it is 
 **In:** onboarding, the session flow (warm-up, movements, sets, rest timer, swaps, skip,
 notes, first-weight finder, movement navigation, celebration, results), mobility day,
 walk/run, Progress (overview, lifts, body, history), backfill a missed session, settings,
-account, data export, paywall.
+account, data export, paywall, the Programs tab, the Shop tab, Friends, connected accounts,
+Find a gym, Recovery, Your first day.
+
+Reopened: Programs, Shop, Friends, connected accounts, and their related sub-screens (Find
+a gym, Recovery, Your first day, Purchases, Plans) were originally cut, then explicitly
+un-cut by the product owner. Where these need a real backend that doesn't exist yet (actual
+gym-locator results, real recovery-place listings, real brand reorder codes, real purchases),
+the screen is fully built to the prototype's layout and copy, with clearly-labeled
+placeholder/"not yet connected" content rather than fake data — never build a purchase flow
+that pretends to charge a card. A dev-only unlock exists for testing block gating without a
+real purchase.
+
+Milestones was also cut, then explicitly un-cut by the product owner. Progress's Overview
+tab has the real `progMilestones`/`progNext` cards (earned/locked badges, "closest
+milestones" progress bars), computed live from existing history/mobility/walks/streak data —
+no new table. The prototype's full milestone-browser sub-screen (`SUB.milestones`, grouped
+by category) was not part of that un-cut and is not built; the "See all N milestones" button
+is a labeled not-yet-built state. Progress photos are the one milestone tier not ported —
+there's no photo capture/upload feature anywhere in this app.
 
 **Cut from v1** — present in the prototype, deliberately not shipping first:
-Friends, connected accounts, Partner preview, Demo account, the Shop tab, the Programs tab
-(Hyrox and Marathon are empty stubs), Milestones, Goals.
+Partner preview, Demo account, Goals (the standalone Goals feature — the goal *field* itself
+is collected at onboarding and used for calorie estimates).
 
-Cutting these is roughly 40% of the surface area. Do not quietly add them back.
+Cutting these is a small slice of the surface area. Do not quietly add them back.
 
 ## Conventions
 

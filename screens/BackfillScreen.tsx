@@ -1,9 +1,9 @@
 import React, { useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, Keyboard, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../lib/haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
@@ -24,7 +24,7 @@ export default function BackfillScreen() {
   const { colors } = useTheme();
   const appState = useAppState();
   const navigation = useNavigation<any>();
-  const { block, session, profile } = appState;
+  const { block, session, profile, movementBank } = appState;
 
   const [date, setDate] = useState(daysAgo(1));
   const [showPicker, setShowPicker] = useState(false);
@@ -44,11 +44,12 @@ export default function BackfillScreen() {
     );
   }
 
-  const built = buildSessionForProfile(block, session, profile);
+  const built = buildSessionForProfile(movementBank, block, session, profile);
   const real = built.moves;
   const u = unit(profile.units);
 
   const submit = () => {
+    Keyboard.dismiss();
     // Compare calendar dates, not exact timestamps — date is normalized to noon, so a
     // straight ">" against the live clock would wrongly reject "today" before noon.
     const today = new Date();
@@ -60,7 +61,7 @@ export default function BackfillScreen() {
       return;
     }
     setSubmitting(true);
-    const entry = buildBackfillEntry(block, session, profile, date, weights);
+    const entry = buildBackfillEntry(movementBank, block, session, profile, date, weights);
     appState.commitBackfill(entry);
     setSubmitting(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});

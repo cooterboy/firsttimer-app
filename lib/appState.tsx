@@ -3,18 +3,45 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "./supabase";
 import {
   deleteSession as deleteSessionRemote,
+  deleteWeighIn as deleteWeighInRemote,
+  fetchProgramContent,
   fetchRemoteState,
+  fetchShopItems,
+  ProgramInfo,
+  pushConnectedAccount,
+  pushFriend,
   pushMobility,
   pushProfile,
+  pushProgramNotify,
+  pushPurchase,
   pushSession,
   pushSettings,
   pushWalk,
   pushWeighIn,
   resetTestData as resetTestDataRemote,
+  ShopItem,
 } from "./sync";
 import { loadCachedState, saveCachedState, type CachedState } from "./localCache";
-import { convertHistoryUnits, convertProfileWeight, devSeedNearBlockEnd } from "./sessionEngine";
-import { ActiveWorkout, HistoryEntry, MobilityEntry, Profile, Settings, WalkEntry, WeighIn } from "./types";
+import {
+  loadCachedProgramContent,
+  loadCachedShopItems,
+  saveCachedProgramContent,
+  saveCachedShopItems,
+} from "./contentCache";
+import { AWAY_DAYS, convertHistoryUnits, convertProfileWeight, devSeedNearBlockEnd, recoveryProtectedDays } from "./sessionEngine";
+import { setHapticsEnabled } from "./haptics";
+import { setSoundsEnabled } from "./sound";
+import { BaseMovement, GYM, Letter } from "./gymProgram";
+import { ActiveWorkout, Friend, HistoryEntry, MobilityEntry, Profile, Purchase, Settings, WalkEntry, WeighIn } from "./types";
+
+// Fallback program-info list — matches lib/gymProgram.ts's GYM-only reality
+// until migration 009's `programs` table is fetched. Real, live rows always
+// win once fetched; this only covers a fresh install with no network yet.
+const fallbackPrograms: ProgramInfo[] = [
+  { category: "gym", name: "Gym", sub: "24 sessions a block · strength", live: true },
+  { category: "hyrox", name: "Hyrox", sub: "12 weeks to race day", live: false },
+  { category: "marathon", name: "Marathon prep", sub: "16 weeks, one long run at a time", live: false },
+];
 
 // In-memory app state, mirroring the shape of the prototype's `state` object
 // (profile, settings, block/session position, history, streak, in-progress workout),
@@ -33,6 +60,14 @@ const defaultProfile: Profile = {
   heightCm: null,
   weight: null,
   goal: null,
+  days: 3,
+  activity: null,
+  why: null,
+  medicalDisclaimerAccepted: false,
+  friendsOptIn: false,
+  boxCode: "",
+  city: "",
+  recoveryAdjustedAt: null,
 };
 
 const defaultSettings: Settings = {
@@ -43,7 +78,16 @@ const defaultSettings: Settings = {
   weighin: true,
   reminders: true,
   remindTime: "7:00 am",
+  mobilityReminder: true,
+  recapReminder: true,
   mobility: "weekly",
+  accent: "orange",
+  sounds: true,
+  haptics: true,
+  quotes: true,
+  paused: false,
+  openerSeen: "",
+  recapSeen: "",
 };
 
 type AppState = {
@@ -55,6 +99,13 @@ type AppState = {
   mobility: MobilityEntry[];
   walks: WalkEntry[];
   weighins: WeighIn[];
+  friends: Friend[];
+  connectedAccounts: Record<string, boolean>;
+  notify: Record<string, boolean>;
+  purchases: Purchase[];
+  movementBank: Record<Letter, BaseMovement[]>;
+  programs: ProgramInfo[];
+  shopItems: ShopItem[];
   streak: number;
   lastDate: string | null;
   active: ActiveWorkout | null;
@@ -72,14 +123,22 @@ type AppStateContextValue = AppState & {
   commitWalk: (entry: WalkEntry) => void;
   updateWalkEntry: (id: string, patch: Partial<WalkEntry>) => void;
   commitWeighIn: (entry: WeighIn) => void;
+  updateWeighIn: (id: string, w: number) => void;
+  deleteWeighIn: (id: string) => void;
+  commitFriend: (entry: Friend) => void;
+  toggleFriendBump: (code: string) => void;
+  toggleConnectedAccount: (network: string) => void;
+  toggleProgramNotify: (category: string) => void;
+  commitPurchase: (entry: Purchase) => void;
   advanceBlock: () => void;
   restartBlockPosition: () => void;
   updateHistoryEntry: (block: number, idx: number, patch: Partial<HistoryEntry>) => void;
   deleteHistoryEntry: (block: number, idx: number) => void;
-  signUp: (email: string, password: string, name: string, units: Profile["units"]) => Promise<{ error: string | null; needsEmailConfirm: boolean }>;
+  signUp: (email: string, password: string, name: string, units: Profile["units"], age: number | null) => Promise<{ error: string | null; needsEmailConfirm: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<{ error: string | null }>;
   resetTestData: () => Promise<void>;
   devSeedNearBlockEnd: () => void;
   updateProfile: (patch: Partial<Profile>) => void;
@@ -92,12 +151,32 @@ const AppStateContext = createContext<AppStateContextValue | null>(null);
 export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile>(defaultProfile);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
+  useEffect(() => {
+    setHapticsEnabled(settings.haptics);
+  }, [settings.haptics]);
+  useEffect(() => {
+    setSoundsEnabled(settings.sounds);
+  }, [settings.sounds]);
   const [block, setBlock] = useState(1);
   const [session, setSession] = useState(0);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [mobility, setMobility] = useState<MobilityEntry[]>([]);
   const [walks, setWalks] = useState<WalkEntry[]>([]);
   const [weighins, setWeighins] = useState<WeighIn[]>([]);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [connectedAccounts, setConnectedAccounts] = useState<Record<string, boolean>>({});
+  const [notify, setNotify] = useState<Record<string, boolean>>({});
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  // Content-as-data (migration 009): which programs exist, and the gym movement
+  // bank — fetched from Supabase, cached locally, falling back to
+  // lib/gymProgram.ts's own GYM constant only if a fresh install has neither a
+  // cache nor a network connection yet.
+  const [movementBank, setMovementBank] = useState<Record<Letter, BaseMovement[]>>(GYM);
+  const [programs, setPrograms] = useState<ProgramInfo[]>(fallbackPrograms);
+  // Content-as-data (migration 012): gear/box-reorder items. No bundled fallback —
+  // unlike the movement bank, an empty shop is an honest, expected state (no real
+  // brand deals exist yet), not a broken one.
+  const [shopItems, setShopItems] = useState<ShopItem[]>([]);
   const [streak, setStreak] = useState(0);
   const [lastDate, setLastDate] = useState<string | null>(null);
   const [active, setActive] = useState<ActiveWorkout | null>(null);
@@ -108,12 +187,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
   // Read fresh in async callbacks without re-subscribing effects on every change.
   const latest = useRef({ profile, block, session, streak, lastDate });
-  latest.current = { profile, block, session, streak, lastDate };
+  useEffect(() => {
+    latest.current = { profile, block, session, streak, lastDate };
+  });
 
   // The name/units typed at sign-up, held here when email confirmation is required
   // (signUp returns no session in that case, so there's nothing to push to yet).
   // Applied the moment a real, confirmed session shows up.
-  const pendingSignup = useRef<{ name: string; units: Profile["units"] } | null>(null);
+  const pendingSignup = useRef<{ name: string; units: Profile["units"]; age: number | null } | null>(null);
 
   // Guards the write-through cache effect below against a real race: setUserId
   // commits (and can render) before the async cache read resolves, and without
@@ -131,6 +212,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setMobility([]);
     setWalks([]);
     setWeighins([]);
+    setFriends([]);
+    setConnectedAccounts({});
+    setNotify({});
+    setPurchases([]);
     setStreak(0);
     setLastDate(null);
     setActive(null);
@@ -153,6 +238,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setMobility(s.mobility);
     setWalks(s.walks);
     setWeighins(s.weighins);
+    setFriends(s.friends);
+    setConnectedAccounts(s.connectedAccounts);
+    setNotify(s.notify);
+    setPurchases(s.purchases);
   };
 
   // The actual network fetch + reconcile. Never awaited by the boot sequence — it
@@ -166,7 +255,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         // The name/units they typed at sign-up never made it to the server if
         // email confirmation was required — apply it now that we have a real session.
         if (!remote.profile.name && pendingSignup.current) {
-          profileToUse = { ...remote.profile, name: pendingSignup.current.name, units: pendingSignup.current.units };
+          profileToUse = {
+            ...remote.profile,
+            name: pendingSignup.current.name,
+            units: pendingSignup.current.units,
+            age: pendingSignup.current.age,
+          };
           pendingSignup.current = null;
           pushProfile(uid, profileToUse, {
             block: remote.block,
@@ -186,6 +280,52 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       console.warn("Could not load your saved data — staying on what's local.", e);
     }
   };
+
+  // Content-as-data: cache-first, then a background network refresh — same
+  // shape as the per-user hydrate above, but this is shared, account-independent
+  // content, so it only needs a signed-in session to read (RLS: authenticated),
+  // not a specific uid.
+  const loadProgramContent = async () => {
+    const cached = await loadCachedProgramContent();
+    if (cached) {
+      setMovementBank(cached.bank);
+      setPrograms(cached.programs);
+    }
+    try {
+      const fresh = await fetchProgramContent();
+      if (fresh) {
+        setMovementBank(fresh.bank);
+        setPrograms(fresh.programs);
+        saveCachedProgramContent(fresh).catch(() => {});
+      }
+    } catch (e) {
+      console.warn("Program content refresh failed, staying on cache/fallback:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (userId) loadProgramContent();
+  }, [userId]);
+
+  // Same cache-first-then-refresh shape as loadProgramContent above, for shop_items
+  // (migration 012).
+  const loadShopItems = async () => {
+    const cached = await loadCachedShopItems();
+    if (cached) setShopItems(cached);
+    try {
+      const fresh = await fetchShopItems();
+      if (fresh) {
+        setShopItems(fresh);
+        saveCachedShopItems(fresh).catch(() => {});
+      }
+    } catch (e) {
+      console.warn("Shop items refresh failed, staying on cache:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (userId) loadShopItems();
+  }, [userId]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -234,6 +374,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       sub.subscription.unsubscribe();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount; refreshRemote isn't memoized and re-subscribing onAuthStateChange every render would be the real bug
   }, []);
 
   // Write-through: whatever's in memory for the signed-in account is mirrored to
@@ -242,18 +383,36 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   // to blank defaults can't clobber the real cached snapshot for that account.
   useEffect(() => {
     if (!userId || !bootSettled.current) return;
-    saveCachedState(userId, { profile, settings, block, session, streak, lastDate, history, mobility, walks, weighins, active }).catch(() => {});
-  }, [userId, profile, settings, block, session, streak, lastDate, history, mobility, walks, weighins, active]);
+    saveCachedState(userId, {
+      profile,
+      settings,
+      block,
+      session,
+      streak,
+      lastDate,
+      history,
+      mobility,
+      walks,
+      weighins,
+      friends,
+      connectedAccounts,
+      notify,
+      purchases,
+      active,
+    }).catch(() => {});
+  }, [userId, profile, settings, block, session, streak, lastDate, history, mobility, walks, weighins, friends, connectedAccounts, notify, purchases, active]);
 
   // prototype's logSession(): push the entry once, bump streak/session/block position.
   const commitSession = (entry: HistoryEntry) => {
     setHistory((h) => {
       if (h.some((x) => x.block === entry.block && x.idx === entry.idx)) return h;
-      const gap = lastDate ? (Date.now() - new Date(lastDate).getTime()) / 86400000 : 0;
-      const newStreak = gap > 10 ? 1 : streak + 1;
+      const rawGap = lastDate ? (Date.now() - new Date(lastDate).getTime()) / 86400000 : 0;
+      const gap = rawGap - recoveryProtectedDays(lastDate, profile.recoveryAdjustedAt);
+      const newStreak = gap > AWAY_DAYS && !settings.paused ? 1 : streak + 1;
       setStreak(newStreak);
       setLastDate(entry.date);
       setSession((s) => s + 1);
+      if (settings.paused) updateSettings({ paused: false });
       if (userId) {
         pushSession(userId, entry).catch((e) => console.warn("Session save failed, staying local:", e));
         pushProfile(userId, latest.current.profile, {
@@ -324,6 +483,68 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     setWeighins((w) => [...w, entry]);
     updateProfile({ weight: entry.w });
     if (userId) pushWeighIn(userId, entry).catch((e) => console.warn("Weigh-in save failed, staying local:", e));
+  };
+
+  const latestWeighInValue = (ws: WeighIn[]): number | null => {
+    const latest = [...ws].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    return latest ? latest.w : null;
+  };
+
+  // Correcting or removing a mislogged weigh-in — same rationale as the recent
+  // SessionDetailSheet weight-edit fix: an append-only log still needs a way to fix a
+  // mistake. Keeps profile.weight (read by the nutrition card's calorie estimate) in
+  // sync with whatever's now actually the latest entry, same invariant commitWeighIn
+  // already maintains for a fresh log.
+  const updateWeighIn = (id: string, w: number) => {
+    const next = weighins.map((x) => (x.id === id ? { ...x, w } : x));
+    setWeighins(next);
+    const entry = next.find((x) => x.id === id);
+    if (entry && userId) pushWeighIn(userId, entry).catch((e) => console.warn("Weigh-in update failed, staying local:", e));
+    const latest = latestWeighInValue(next);
+    if (latest != null) updateProfile({ weight: latest });
+  };
+
+  const deleteWeighIn = (id: string) => {
+    const next = weighins.filter((x) => x.id !== id);
+    setWeighins(next);
+    if (userId) deleteWeighInRemote(userId, id).catch((e) => console.warn("Weigh-in delete failed, staying local:", e));
+    const latest = latestWeighInValue(next);
+    if (latest != null) updateProfile({ weight: latest });
+  };
+
+  const commitFriend = (entry: Friend) => {
+    setFriends((f) => [...f, entry]);
+    if (userId) pushFriend(userId, entry).catch((e) => console.warn("Friend save failed, staying local:", e));
+  };
+
+  const toggleFriendBump = (code: string) => {
+    setFriends((list) => {
+      const next = list.map((f) => (f.code === code ? { ...f, bumped: !f.bumped } : f));
+      const updated = next.find((f) => f.code === code);
+      if (userId && updated) pushFriend(userId, updated).catch((e) => console.warn("Friend bump save failed, staying local:", e));
+      return next;
+    });
+  };
+
+  const toggleConnectedAccount = (network: string) => {
+    setConnectedAccounts((cur) => {
+      const next = { ...cur, [network]: !cur[network] };
+      if (userId) pushConnectedAccount(userId, network, next[network]).catch((e) => console.warn("Connected-account save failed, staying local:", e));
+      return next;
+    });
+  };
+
+  const toggleProgramNotify = (category: string) => {
+    setNotify((cur) => {
+      const next = { ...cur, [category]: !cur[category] };
+      if (userId) pushProgramNotify(userId, category, next[category]).catch((e) => console.warn("Program-notify save failed, staying local:", e));
+      return next;
+    });
+  };
+
+  const commitPurchase = (entry: Purchase) => {
+    setPurchases((p) => [...p, entry]);
+    if (userId) pushPurchase(userId, entry).catch((e) => console.warn("Purchase save failed, staying local:", e));
   };
 
   const advanceBlock = () => {
@@ -436,13 +657,13 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, name: string, units: Profile["units"]) => {
+  const signUp = async (email: string, password: string, name: string, units: Profile["units"], age: number | null) => {
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) return { error: error.message, needsEmailConfirm: false };
-    // Hold the name/units here; onAuthStateChange -> hydrateFrom applies and pushes
+    // Hold the name/units/age here; onAuthStateChange -> hydrateFrom applies and pushes
     // them the moment a real session exists (immediately if email confirmation is
     // off, or after they confirm and sign in for real if it's on).
-    pendingSignup.current = { name, units };
+    pendingSignup.current = { name, units, age };
     return { error: null, needsEmailConfirm: !data.session };
   };
 
@@ -457,6 +678,22 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email);
+    return { error: error ? error.message : null };
+  };
+
+  // Prototype's change-password check verifies the current password by comparing
+  // a local hash (spec/prototype.html:3210). Supabase has no such API, so the
+  // real equivalent is to re-authenticate with the current password first — same
+  // effect (a wrong current password fails distinctly from a weak new one)
+  // without exposing anything an unlocked session shouldn't.
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    if (!userEmail) return { error: "Not signed in." };
+    const { error: reauthError } = await supabase.auth.signInWithPassword({
+      email: userEmail,
+      password: currentPassword,
+    });
+    if (reauthError) return { error: "Current password isn't right." };
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
     return { error: error ? error.message : null };
   };
 
@@ -500,6 +737,13 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       mobility,
       walks,
       weighins,
+      friends,
+      connectedAccounts,
+      notify,
+      purchases,
+      movementBank,
+      programs,
+      shopItems,
       streak,
       lastDate,
       active,
@@ -514,6 +758,13 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       commitWalk,
       updateWalkEntry,
       commitWeighIn,
+      updateWeighIn,
+      deleteWeighIn,
+      commitFriend,
+      toggleFriendBump,
+      toggleConnectedAccount,
+      toggleProgramNotify,
+      commitPurchase,
       advanceBlock,
       restartBlockPosition,
       updateHistoryEntry,
@@ -522,12 +773,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signOut,
       resetPassword,
+      changePassword,
       resetTestData,
       devSeedNearBlockEnd: devSeedNearBlockEndFn,
       updateProfile,
       setUnits,
       updateSettings,
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately state-only; none of the functions above are memoized, so listing them would make this recompute (and re-render every consumer) on every render, defeating the memo. Nothing downstream relies on their referential identity.
     [
       profile,
       settings,
@@ -537,6 +790,13 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       mobility,
       walks,
       weighins,
+      friends,
+      connectedAccounts,
+      notify,
+      purchases,
+      movementBank,
+      programs,
+      shopItems,
       streak,
       lastDate,
       active,

@@ -43,6 +43,52 @@ export const darkColors = {
 
 export type ThemeColors = typeof lightColors;
 
+// prototype's ACCENTS array (spec/prototype.html:1167) — "pink" exists in the
+// prototype's CSS (:root[data-accent="pink"]) but was never wired into the
+// ACCENTS array the settings picker actually renders, so it's unreachable
+// there too — not ported here either.
+export const ACCENTS: { k: import("./types").AccentKey; l: string; c: string }[] = [
+  { k: "orange", l: "Safety orange", c: "#FF5E1A" },
+  { k: "green", l: "Green", c: "#1F8A5B" },
+  { k: "blue", l: "Blue", c: "#2563EB" },
+  { k: "ink", l: "Ink", c: "#17140F" },
+];
+
+// prototype's :root[data-accent="..."] / dark-mode overrides (spec/prototype.html:33-46).
+const accentOverrides: Record<
+  import("./types").AccentKey,
+  { light: Partial<ThemeColors>; dark: Partial<ThemeColors> }
+> = {
+  orange: { light: {}, dark: {} },
+  green: {
+    light: { accent: "#1F8A5B", accentDeep: "#166A45", accentSoft: "#D9F0E3", accentInk: "#FFFFFF" },
+    dark: { accent: "#4ADE80", accentDeep: "#86EFAC", accentSoft: "#14321F", accentInk: "#131110" },
+  },
+  blue: {
+    light: { accent: "#2563EB", accentDeep: "#1D4ED8", accentSoft: "#DCE7FD", accentInk: "#FFFFFF" },
+    dark: { accent: "#60A5FA", accentDeep: "#93C5FD", accentSoft: "#14233D", accentInk: "#131110" },
+  },
+  ink: {
+    light: { accent: "#17140F", accentDeep: "#000000", accentSoft: "#E6E1D5", accentInk: "#F6F1E7" },
+    dark: { accent: "#F3EEE3", accentDeep: "#FFFFFF", accentSoft: "#2A2620", accentInk: "#131110" },
+  },
+};
+
+// categoryOverride comes from lib/categoryThemes.ts via ThemeContext.tsx — kept as a
+// plain Partial<ThemeColors> param here (rather than importing CategoryKey) so this
+// file stays the color-token primitive, with no knowledge of "category" as a concept.
+// Applied UNDER the accent override, so a category's default palette (once a second
+// category ever ships real content) never overrides the user's own accent choice.
+export function colorsFor(
+  scheme: "light" | "dark",
+  accent: import("./types").AccentKey,
+  categoryOverride?: Partial<ThemeColors>
+): ThemeColors {
+  const base = scheme === "dark" ? darkColors : lightColors;
+  const accentOverride = accentOverrides[accent]?.[scheme] || {};
+  return { ...base, ...(categoryOverride || {}), ...accentOverride };
+}
+
 // prototype's --r
 export const radius = 16;
 

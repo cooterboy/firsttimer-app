@@ -1,6 +1,6 @@
 import React from "react";
-import { Text, TextInput, TouchableOpacity, View, StyleSheet } from "react-native";
-import * as Haptics from "expo-haptics";
+import { Keyboard, Text, TextInput, TouchableOpacity, View, StyleSheet } from "react-native";
+import * as Haptics from "../../lib/haptics";
 import { useTheme } from "../../lib/ThemeContext";
 import { fonts, radius } from "../../lib/theme";
 
@@ -100,6 +100,7 @@ export default function SetRow({
           done && { backgroundColor: colors.good, borderColor: colors.good },
         ]}
         onPress={() => {
+          Keyboard.dismiss();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
           onToggleDone();
         }}

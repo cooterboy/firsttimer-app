@@ -3,21 +3,21 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  ScrollView,
-  Share,
   Text,
   TouchableOpacity,
   View,
   StyleSheet,
 } from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
+import * as Haptics from "../lib/haptics";
+import { playBeep } from "../lib/sound";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import { useWorkoutModal } from "../lib/workoutModal";
-import { ActiveMove, ActiveWorkout, HistoryEntry, SheetState } from "../lib/types";
-import { BLOCK_SESSIONS, MovementVariant, daysPer, specFor, step as stepFor, unit as unitFor } from "../lib/gymProgram";
+import { ActiveMove, ActiveWorkout, SheetState } from "../lib/types";
+import { BLOCK_SESSIONS, MovementVariant, daysPer, ownedBlocks, specFor, step as stepFor, unit as unitFor } from "../lib/gymProgram";
 import {
   buildSessionForProfile,
   coachRead,
@@ -34,8 +34,10 @@ import {
   applySwap as applySwapEngine,
   setFeedback,
   movedToday,
+  plateauSignal,
 } from "../lib/sessionEngine";
 import FadeSwitch from "../components/workout/FadeSwitch";
+import SwipeNav from "../components/workout/SwipeNav";
 import WarmupView from "../components/workout/WarmupView";
 import MovementView from "../components/workout/MovementView";
 import CelebrateView from "../components/workout/CelebrateView";
@@ -55,6 +57,10 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
   const [sheet, setSheet] = useState<SheetState>(null);
   const [rest, setRest] = useState<{ total: number; end: number } | null>(null);
   const [, forceTick] = useState(0);
+  // Dismissing a plateau banner only lasts this session visit — a fresh open next time
+  // re-derives it live from history (lib/sessionEngine.ts's plateauSignal(), no
+  // persisted state, same as recoverySignal()).
+  const [dismissedPlateaus, setDismissedPlateaus] = useState<Set<string>>(new Set());
 
   // Open a fresh session (or resume) whenever the modal opens. appState.active is the
   // source of truth for "is a session actually in progress" — it's explicitly cleared
@@ -66,7 +72,7 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
     if (appState.active && appState.active.block === appState.block && appState.active.idx === appState.session) {
       setWo(appState.active);
     } else {
-      const built = buildSessionForProfile(appState.block, appState.session, appState.profile);
+      const built = buildSessionForProfile(appState.movementBank, appState.block, appState.session, appState.profile);
       const comebackFactor = workoutModal.pendingComebackFactor ?? undefined;
       const fresh = newActiveWorkout(built, appState.profile, appState.settings, appState.history, comebackFactor);
       appState.setActive(fresh);
@@ -83,6 +89,7 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
       forceTick((x) => x + 1);
       if (Date.now() >= rest.end) {
         setRest(null);
+        playBeep();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       }
     }, 250);
@@ -112,6 +119,8 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
   const move = wo.mi < wo.moves.length ? wo.moves[wo.mi] : null;
   const phase: "warmup" | "movement" | "celebrate" | "finish" =
     wo.mi >= wo.moves.length ? (wo.celebrated ? "finish" : "celebrate") : isWarmup(wo.moves[wo.mi]) ? "warmup" : "movement";
+  const plateaued =
+    !!move && move.type === "weight" && !dismissedPlateaus.has(move.n) && plateauSignal(appState.history, move.n).plateaued;
 
   const updateWo = (next: ActiveWorkout) => {
     setWo(next);
@@ -301,57 +310,74 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
               })}
             </View>
           </View>
+        ) : phase === "celebrate" ? (
+          // No "Save & exit" copy here — everything up to this point is already
+          // committed live, so there's nothing left to save. Just a way out that
+          // doesn't require knowing to swipe down or hit hardware back.
+          <View style={styles.topBar}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => closeAndReset(false)}
+              style={styles.backBtn}
+              accessibilityLabel="Close"
+              accessibilityRole="button"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={{ color: colors.ink2, fontSize: 22 }}>✕</Text>
+            </TouchableOpacity>
+          </View>
         ) : null}
 
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           {(phase === "warmup" || phase === "movement") && (
-            <FadeSwitch id={wo.mi}>
-              {phase === "warmup" && wo.moves[wo.mi] ? (
-                <WarmupView move={wo.moves[wo.mi]} gym={profile.where === "gym"} onDone={onWarmupDone} />
-              ) : null}
+            <SwipeNav onSwipeLeft={() => goMove(wo.mi + 1)} onSwipeRight={() => goMove(wo.mi - 1)}>
+              <FadeSwitch id={wo.mi}>
+                {phase === "warmup" && wo.moves[wo.mi] ? (
+                  <WarmupView move={wo.moves[wo.mi]} gym={profile.where === "gym"} onDone={onWarmupDone} />
+                ) : null}
 
-              {phase === "movement" && move ? (
-                <MovementView
-                  move={move}
-                  moveIndex={wo.mi}
-                  allMoves={wo.moves}
-                  units={profile.units}
-                  rest={restState}
-                  lastNote={lastNoteFor(move.n)}
-                  onChangeSetValue={onChangeSetValue}
-                  onStepSet={onStepSet}
-                  onToggleSet={onToggleSet}
-                  onSetFeel={onSetFeel}
-                  onNext={advance}
-                  onSkipRest={() => {
-                    if (!restState || restState.hold <= 0) clearRest();
-                  }}
-                  onOpenInfo={onOpenInfo}
-                  onOpenSwap={onOpenSwap}
-                  onOpenHurt={onOpenHurt}
-                  onOpenNote={onOpenNote}
-                  onOpenFindWeight={onOpenFindWeight}
-                  onOpenShortOnTime={onOpenShortOnTime}
-                  onUnskip={onUnskip}
-                  dropSet={!!wo.dropSet}
-                />
-              ) : null}
-            </FadeSwitch>
+                {phase === "movement" && move ? (
+                  <MovementView
+                    move={move}
+                    moveIndex={wo.mi}
+                    allMoves={wo.moves}
+                    units={profile.units}
+                    rest={restState}
+                    lastNote={lastNoteFor(move.n)}
+                    onChangeSetValue={onChangeSetValue}
+                    onStepSet={onStepSet}
+                    onToggleSet={onToggleSet}
+                    onSetFeel={onSetFeel}
+                    onNext={advance}
+                    onSkipRest={() => {
+                      if (!restState || restState.hold <= 0) clearRest();
+                    }}
+                    onOpenInfo={onOpenInfo}
+                    onOpenSwap={onOpenSwap}
+                    onOpenHurt={onOpenHurt}
+                    onOpenNote={onOpenNote}
+                    onOpenFindWeight={onOpenFindWeight}
+                    onOpenShortOnTime={onOpenShortOnTime}
+                    onUnskip={onUnskip}
+                    dropSet={!!wo.dropSet}
+                    plateaued={plateaued}
+                    onOpenPlateauInfo={onOpenInfo}
+                    onDismissPlateau={() => setDismissedPlateaus((cur) => new Set(cur).add(move.n))}
+                  />
+                ) : null}
+              </FadeSwitch>
+            </SwipeNav>
           )}
 
           {phase === "celebrate" && wo.fc ? (
             <CelebrateView
               fc={wo.fc}
-              nMoves={totalReal}
-              minutes={wo.fc ? logMinutes(wo) : 0}
+              session={wo.idx + 1}
+              streak={appState.streak}
               moved={movedToday(wo.moves.filter((m) => !isWarmup(m)))}
-              ups={wo.moves.filter((m) => m.type === "weight" && !m.skipped && historyWentUp(m, wo, appState.history)).length}
               unit={unitFor(profile.units)}
-              blockDone={appState.session >= BLOCK_SESSIONS}
-              onSeeResults={() => updateWo({ ...wo, celebrated: true })}
-              onShare={() => shareCaption(wo.fc!.caption)}
-              onDone={() => closeAndReset(true)}
+              onContinue={() => updateWo({ ...wo, celebrated: true })}
             />
           ) : null}
 
@@ -364,7 +390,7 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
                 const isFirst = !!firstSame && firstSame.idx === wo.idx;
                 const blockDone = appState.session >= BLOCK_SESSIONS;
                 const coachLines = coachRead(wo, real, isFirst, appState.history, profile);
-                const np = nextPreview(appState.block, appState.session, profile);
+                const np = nextPreview(appState.movementBank, appState.block, appState.session, profile);
                 return (
                   <FinishView
                     wo={wo}
@@ -380,7 +406,11 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
                     blockDone={blockDone}
                     onSaveEntry={(patch) => appState.updateHistoryEntry(wo.block, wo.idx, patch)}
                     onDone={() => {
-                      if (blockDone) appState.advanceBlock();
+                      // Only auto-advance if the next block is actually owned — otherwise
+                      // block/session stay put (TodayScreen shows the unlock/repeat state).
+                      // PlansScreen's own doUnlock() already calls advanceBlock() itself
+                      // once a purchase (or the dev-only unlock) actually happens.
+                      if (blockDone && ownedBlocks(appState.purchases) > wo.block) appState.advanceBlock();
                       closeAndReset(true);
                     }}
                   />
@@ -406,23 +436,6 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
       </SafeAreaView>
     </Modal>
   );
-}
-
-function logMinutes(wo: ActiveWorkout): number {
-  const ms = (wo.activeMs || 0) + (wo.segStart ? Date.now() - wo.segStart : 0);
-  return Math.max(1, Math.round(ms / 60000));
-}
-function historyWentUp(m: ActiveMove, wo: ActiveWorkout, history: HistoryEntry[]): boolean {
-  for (let i = history.length - 1; i >= 0; i--) {
-    const h = history[i];
-    if (h.block === wo.block && h.idx === wo.idx) continue;
-    const hm = h.moves[m.n];
-    if (hm && hm.w) return !!(m.w && Number(m.w) > Number(hm.w));
-  }
-  return false;
-}
-function shareCaption(caption: string) {
-  Share.share({ message: caption }).catch(() => {});
 }
 
 const styles = StyleSheet.create({

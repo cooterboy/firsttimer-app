@@ -7,9 +7,11 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.firsttimer.app"
     },
     "android": {
+      "package": "com.firsttimer.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -26,7 +28,8 @@
       "expo-splash-screen",
       "@react-native-community/datetimepicker",
       "expo-sharing",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-audio"
     ]
   }
 }

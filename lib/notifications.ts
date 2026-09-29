@@ -22,6 +22,15 @@ Notifications.setNotificationHandler({
 // 1 = Sunday ... 7 = Saturday (expo-notifications' WeeklyTriggerInput convention).
 const WEEKDAY_NUMBER: Record<number, number> = { 0: 2, 1: 3, 2: 4, 3: 5, 4: 6, 5: 7, 6: 1 };
 const REMINDER_ID = (planIdx: number) => `first-timer-training-reminder-${planIdx}`;
+const MOBILITY_REMINDER_ID = "first-timer-mobility-reminder";
+const RECAP_REMINDER_ID = "first-timer-recap-reminder";
+// Mobility day itself isn't tied to a fixed calendar day — mobilityDue() checks
+// weekly/biweekly "due" status dynamically, not a specific weekday — so there's no
+// single day the prototype (or this app) already treats as "mobility day." Saturday is
+// a deliberate simplification for the reminder only: a fixed rest-day slot that
+// doesn't collide with the Sunday recap notification.
+const MOBILITY_REMINDER_WEEKDAY = 7; // Saturday
+const RECAP_REMINDER_WEEKDAY = 1; // Sunday
 
 export async function getNotificationPermissionGranted(): Promise<boolean> {
   try {
@@ -86,4 +95,48 @@ export async function scheduleTrainingReminders(remindTime: string): Promise<voi
       })
     )
   );
+}
+
+export async function cancelMobilityReminder(): Promise<void> {
+  await Notifications.cancelScheduledNotificationAsync(MOBILITY_REMINDER_ID).catch(() => {});
+}
+
+export async function scheduleMobilityReminder(remindTime: string): Promise<void> {
+  await cancelMobilityReminder();
+  const { hour, minute } = parseRemindTime(remindTime);
+  await Notifications.scheduleNotificationAsync({
+    identifier: MOBILITY_REMINDER_ID,
+    content: {
+      title: "Mobility day.",
+      body: "Ten timed stretches, about 12 minutes. Open First Timer to start.",
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+      weekday: MOBILITY_REMINDER_WEEKDAY,
+      hour,
+      minute,
+    },
+  });
+}
+
+export async function cancelRecapReminder(): Promise<void> {
+  await Notifications.cancelScheduledNotificationAsync(RECAP_REMINDER_ID).catch(() => {});
+}
+
+export async function scheduleRecapReminder(remindTime: string): Promise<void> {
+  await cancelRecapReminder();
+  const { hour, minute } = parseRemindTime(remindTime);
+  await Notifications.scheduleNotificationAsync({
+    identifier: RECAP_REMINDER_ID,
+    content: {
+      title: "Last week, in one notification.",
+      body: "Sessions, weight moved, what went up. Open First Timer to see it.",
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+      weekday: RECAP_REMINDER_WEEKDAY,
+      hour,
+      minute,
+    },
+  });
 }

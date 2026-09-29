@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { Text, TextInput, TouchableOpacity, View, StyleSheet } from "react-native";
-import * as Haptics from "expo-haptics";
+import { Keyboard, Text, TextInput, TouchableOpacity, View, StyleSheet } from "react-native";
+import * as Haptics from "../../lib/haptics";
 import { useTheme } from "../../lib/ThemeContext";
 import { fonts, spacing } from "../../lib/theme";
 import { ActiveMove, Profile, SheetState } from "../../lib/types";
@@ -223,6 +223,7 @@ export function FindWeightSheetContent({
   onSave: (value: number) => void;
   onClose: () => void;
 }) {
+  const { colors } = useTheme();
   const hint = startHint(move, profile);
   const [step, setStep] = useState<"start" | "feel" | "adjustUp" | "adjustDown" | "confirm">("start");
   const [val, setVal] = useState(hint?.v ? String(hint.v) : "");
@@ -234,7 +235,7 @@ export function FindWeightSheetContent({
       <View>
         <SheetTitle>Find your weight</SheetTitle>
         <SheetBody>One minute, and it doesn't count as a set. Nobody is watching and everybody does this.</SheetBody>
-        <View style={styles.banner}>
+        <View style={[styles.banner, { backgroundColor: colors.accentSoft }]}>
           <BannerText hint={hint} />
         </View>
         <SheetBody>Do 5 slow reps. Stop there even if it's easy.</SheetBody>
@@ -244,7 +245,6 @@ export function FindWeightSheetContent({
     );
   }
   if (step === "feel") {
-    const one = hint.single;
     return (
       <View>
         <SheetTitle>How did 5 reps feel?</SheetTitle>
@@ -316,6 +316,7 @@ function FindWeightConfirm({
         onPress={() => {
           const n = Number(val);
           if (n > 0) {
+            Keyboard.dismiss();
             onSave(n);
             onClose();
           }
@@ -383,7 +384,6 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   banner: {
-    backgroundColor: "rgba(255,94,26,0.12)",
     borderRadius: 12,
     padding: 13,
     marginBottom: 14,
