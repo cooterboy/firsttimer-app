@@ -96,16 +96,16 @@ export type Friend = {
   date: string;
 };
 
-// A purchase record (state.purchases). Real payments don't exist yet — the only
-// writer today is the dev-only "Unlock" button on PlansScreen (label "Block N" /
-// "Blocks N–M", price 0), not a real transaction. `blocks` is how many blocks this
-// one purchase actually grants (1 for the single-block plan, 3 for the bundle) — see
-// lib/gymProgram.ts's ownedBlocks(), which sums this rather than counting records.
+// A purchase record (state.purchases): one per store product owned — see
+// lib/blockCatalog.ts. `productId` says which specific blocks it unlocks, and
+// ownedBlocks() works from that. Records from before migration 016 have no
+// productId; for those `blocks` (how many blocks it granted, in order) is used.
 export type Purchase = {
-  id: string;
-  label: string;
+  id: string; // a UUID; one per (account, product) — see lib/purchases.ts's purchaseId()
+  label: string; // "Block 5" / "Blocks 5–7"
   price: number;
   blocks: number;
+  productId?: string | null;
   date: string;
 };
 

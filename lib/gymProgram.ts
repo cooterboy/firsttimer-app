@@ -53,16 +53,6 @@ export type Program = {
   templates: SessionTemplate[];
 };
 
-export const PRICE_ONE = 9;
-export const PRICE_THREE = 19;
-
-// state.owned in the prototype: 1 (block 1, free) plus however many blocks each
-// purchase actually grants — sums Purchase["blocks"], not purchase count, so a
-// "3 blocks for $19" purchase grants 3, not 1.
-export function ownedBlocks(purchases: { blocks: number }[]): number {
-  return 1 + purchases.reduce((a, p) => a + (p.blocks || 1), 0);
-}
-
 const GYM: Record<"A" | "B" | "C", BaseMovement[]> = {
   A: [
     {

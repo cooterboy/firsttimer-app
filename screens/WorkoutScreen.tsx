@@ -17,7 +17,8 @@ import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import { useWorkoutModal } from "../lib/workoutModal";
 import { ActiveMove, ActiveWorkout, SheetState } from "../lib/types";
-import { MovementVariant, daysPer, ownedBlocks, specFor, step as stepFor, unit as unitFor } from "../lib/gymProgram";
+import { MovementVariant, daysPer, specFor, step as stepFor, unit as unitFor } from "../lib/gymProgram";
+import { ownedBlocks } from "../lib/blockCatalog";
 import {
   buildSessionForProfile,
   coachRead,

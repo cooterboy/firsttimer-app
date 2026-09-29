@@ -7,17 +7,15 @@ import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing, type } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import {
-  PRICE_ONE,
-  PRICE_THREE,
   buildSession,
   daysPer,
-  ownedBlocks,
   setsFor,
   unit,
   weekOf,
   weeksPerBlock,
 } from "../lib/gymProgram";
 import { lastFor } from "../lib/sessionEngine";
+import { MAX_BLOCKS, PRICE_ONE, PRICE_THREE, nextOffers, ownedBlocks } from "../lib/blockCatalog";
 import { WHERE_LABEL } from "../lib/types";
 import AppHeader from "../components/AppHeader";
 import Card from "../components/Card";
@@ -63,7 +61,10 @@ export default function ProgramsScreen() {
   const openLast = openMove ? lastFor(openMove, history) : null;
 
   const u = unit(profile.units);
-  const totalBlocks = Math.max(4, block + 2);
+  const totalBlocks = Math.min(MAX_BLOCKS, Math.max(4, block + 2));
+  // Bundles cover fixed blocks (2–4, 5–7, 8–10), so there is only a "next three"
+  // to offer when one starts at exactly the next unowned block.
+  const bundle = nextOffers(owned).bundle;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]} edges={["top"]}>
@@ -263,17 +264,19 @@ export default function ProgramsScreen() {
           })}
         </Card>
 
-        <TouchableOpacity activeOpacity={0.7} style={[styles.navCard, { backgroundColor: colors.raised, marginTop: spacing.md }]} onPress={() => navigation.navigate("Plans")}>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Next three blocks</Text>
-              <Text style={{ color: colors.accentDeep, fontFamily: fonts.monoBold }}>${PRICE_THREE}</Text>
+        {bundle ? (
+          <TouchableOpacity activeOpacity={0.7} style={[styles.navCard, { backgroundColor: colors.raised, marginTop: spacing.md }]} onPress={() => navigation.navigate("Plans")}>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Next three blocks</Text>
+                <Text style={{ color: colors.accentDeep, fontFamily: fonts.monoBold }}>${PRICE_THREE}</Text>
+              </View>
+              <Text style={[styles.moveCue, { color: colors.muted }]}>
+                Blocks {bundle.blocks[0]}–{bundle.blocks[2]}, about {wpb * 3} weeks. Cheaper than one at a time, and nothing to remember.
+              </Text>
             </View>
-            <Text style={[styles.moveCue, { color: colors.muted }]}>
-              Blocks {owned + 1}–{owned + 3}, about {wpb * 3} weeks. Cheaper than one at a time, and nothing to remember.
-            </Text>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        ) : null}
 
         <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display, marginTop: spacing.lg }]}>Other first times</Text>
         {appState.categories

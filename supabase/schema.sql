@@ -167,7 +167,9 @@ create table if not exists purchases (
   label text not null,
   price numeric not null,
   blocks int not null default 1,
-  date timestamptz not null default now()
+  product_id text, -- migration 016: the store product (lib/blockCatalog.ts)
+  date timestamptz not null default now(),
+  constraint purchases_user_product_key unique (user_id, product_id)
 );
 
 alter table purchases enable row level security;

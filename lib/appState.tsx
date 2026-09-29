@@ -542,8 +542,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  // Replaces a record with the same id rather than appending — ids are one per
+  // (account, product), so this mirrors the upsert pushPurchase does in Supabase.
   const commitPurchase = (entry: Purchase) => {
-    setPurchases((p) => [...p, entry]);
+    setPurchases((p) => [...p.filter((x) => x.id !== entry.id), entry]);
     if (userId) pushPurchase(userId, entry).catch((e) => console.warn("Purchase save failed, staying local:", e));
   };
 

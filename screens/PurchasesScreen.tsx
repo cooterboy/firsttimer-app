@@ -6,16 +6,17 @@ import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import { fmtDate } from "../lib/sessionEngine";
-import { PRICE_ONE, PRICE_THREE, ownedBlocks } from "../lib/gymProgram";
-import { BLOCKS_GRANTED, isPurchasesConfigured, restorePurchases } from "../lib/purchases";
+import { PRICE_ONE, PRICE_THREE, ownedBlocks, productFor } from "../lib/blockCatalog";
+import { isPurchasesConfigured, purchaseRecord, restoreBlockProducts } from "../lib/purchases";
 import Card from "../components/Card";
 
 // Ports the prototype's SUB.subscription (spec/prototype.html:3129-3139). "Restore
-// purchases" re-reads RevenueCat's receipt-derived transaction history (see
-// lib/purchases.ts's restorePurchases()) and commits any block purchase not already
-// in appState.purchases — covers a reinstall, a new device signed into the same
-// store account before ever signing into this app's account, or a Supabase write
-// that failed at the time of the original purchase.
+// purchases" asks the store which block products this account owns (see
+// lib/purchases.ts's restoreBlockProducts()) and commits any not already in
+// appState.purchases, each unlocking its own specific blocks (lib/blockCatalog.ts)
+// — covers a reinstall, a new device signed into the same store account before ever
+// signing into this app's account, or a Supabase write that failed at the time of
+// the original purchase.
 export default function PurchasesScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
@@ -30,27 +31,17 @@ export default function PurchasesScreen() {
     }
     setRestoring(true);
     try {
-      const txns = await restorePurchases();
-      const known = new Set(appState.purchases.map((p) => p.id));
-      const missing = txns
-        .filter((t) => !known.has(t.transactionIdentifier))
-        .sort((a, b) => new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime());
+      const storeOwned = await restoreBlockProducts();
+      const known = new Set(appState.purchases.map((p) => p.productId).filter(Boolean));
+      const missing = storeOwned.filter((o) => !known.has(o.productId));
       if (!missing.length) {
         Alert.alert("Nothing to restore", "Every purchase on this account is already unlocked here.");
         return;
       }
-      let runningOwned = owned;
-      missing.forEach((t) => {
-        const blocks = BLOCKS_GRANTED[t.productIdentifier] ?? 1;
-        appState.commitPurchase({
-          id: t.transactionIdentifier,
-          label: blocks === 3 ? `Blocks ${runningOwned + 1}–${runningOwned + blocks}` : `Block ${runningOwned + 1}`,
-          price: blocks === 3 ? PRICE_THREE : PRICE_ONE,
-          blocks,
-          date: t.purchaseDate,
-        });
-        runningOwned += blocks;
-      });
+      for (const o of missing) {
+        const product = productFor(o.productId);
+        if (product) appState.commitPurchase(await purchaseRecord(appState.userId, product, o.date));
+      }
       Alert.alert("Restored", `${missing.length} purchase${missing.length === 1 ? "" : "s"} added back.`);
     } catch (e) {
       console.warn("Restore failed:", e);

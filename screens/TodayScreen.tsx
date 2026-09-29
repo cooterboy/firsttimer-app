@@ -5,7 +5,8 @@ import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing, type } from "../lib/theme";
-import { daysPer, FIRST_DAY, ownedBlocks, PRICE_ONE, Program, unit, weeksPerBlock } from "../lib/gymProgram";
+import { daysPer, FIRST_DAY, Program, unit, weeksPerBlock } from "../lib/gymProgram";
+import { ownedBlocks, PRICE_ONE } from "../lib/blockCatalog";
 import {
   AWAY_DAYS,
   blockRecap,

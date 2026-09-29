@@ -93,6 +93,7 @@ type PurchaseRow = {
   label: string;
   price: number;
   blocks: number;
+  product_id: string | null;
   date: string;
 };
 
@@ -221,7 +222,7 @@ export async function fetchRemoteState(userId: string): Promise<RemoteState | nu
     friends: ((friendRows as FriendRow[]) || []).map(rowToFriend),
     connectedAccounts: Object.fromEntries(socialRows.map((r) => [r.network, !!r.connected])),
     notify: Object.fromEntries(notifyRows.map((r) => [r.category, !!r.notify])),
-    purchases: ((purchaseRows as PurchaseRow[]) || []).map((r) => ({ id: r.id, label: r.label, price: Number(r.price) || 0, blocks: r.blocks || 1, date: r.date })),
+    purchases: ((purchaseRows as PurchaseRow[]) || []).map((r) => ({ id: r.id, label: r.label, price: Number(r.price) || 0, blocks: r.blocks || 1, productId: r.product_id, date: r.date })),
   };
 }
 
@@ -341,7 +342,15 @@ export async function pushProgramNotify(userId: string, category: string, notify
 }
 
 export async function pushPurchase(userId: string, entry: Purchase) {
-  const row = { id: entry.id, user_id: userId, label: entry.label, price: entry.price, blocks: entry.blocks, date: entry.date };
+  const row = {
+    id: entry.id,
+    user_id: userId,
+    label: entry.label,
+    price: entry.price,
+    blocks: entry.blocks,
+    product_id: entry.productId ?? null,
+    date: entry.date,
+  };
   const { error } = await supabase.from("purchases").upsert(row);
   if (error) throw error;
 }

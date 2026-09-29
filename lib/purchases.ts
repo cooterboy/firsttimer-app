@@ -1,40 +1,28 @@
 // RevenueCat wrapper for the block-unlock purchases (spec/prototype.html's
 // state.purchases / PRICE_ONE / PRICE_THREE). This app has no subscription and no
-// entitlement to check — Block 1 is free, every block after is a one-time
-// non-renewing purchase, and ownership is a running count (lib/gymProgram.ts's
-// ownedBlocks()) synced through Supabase's purchases table (lib/sync.ts's
-// pushPurchase), same as every other record in this app (CLAUDE.md's sync rule:
-// client-generated id, write local first, push when online, last-write-wins).
+// entitlement to check. Block 1 is free; every later block is a non-consumable
+// store product, and which products exist and what each unlocks lives in
+// lib/blockCatalog.ts. Ownership is synced through Supabase's purchases table
+// (lib/sync.ts's pushPurchase), same as every other record in this app (CLAUDE.md's
+// sync rule: client-generated id, write local first, push when online,
+// last-write-wins).
 //
-// RevenueCat's job here is strictly "process the payment and hand back a receipt" —
-// Supabase stays the single source of truth for what's owned. That's deliberate:
-// treating RC entitlements as a second copy of ownership would mean reconciling two
-// sources of truth, which is exactly the sync complexity CLAUDE.md says to avoid.
+// RevenueCat's job here is strictly "process the payment and report which products
+// this store account owns" — Supabase stays the single source of truth for what's
+// unlocked. That's deliberate: treating RC entitlements as a second copy of
+// ownership would mean reconciling two sources of truth, which is exactly the sync
+// complexity CLAUDE.md says to avoid.
 import { Platform } from "react-native";
+import * as Crypto from "expo-crypto";
 import Purchases, { CustomerInfo, PURCHASES_ERROR_CODE, PurchasesError, PurchasesPackage } from "react-native-purchases";
+import { BlockProduct, nextOffers, productFor, productLabel } from "./blockCatalog";
+import { Purchase } from "./types";
 
 const IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY;
 const ANDROID_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY;
 const apiKey = Platform.OS === "ios" ? IOS_KEY : Platform.OS === "android" ? ANDROID_KEY : undefined;
 
 export const isPurchasesConfigured = !!apiKey;
-
-// Product identifiers — create these as Consumable IAPs in App Store Connect /
-// Google Play Console with these exact identifiers, then add them to a RevenueCat
-// Offering (see lib/purchases.ts doc comment below / the chat writeup for the full
-// dashboard steps). Consumable, not non-consumable, because block ownership is
-// unbounded (block 2, block 3, block 4, ...) — each purchase is its own transaction,
-// and RevenueCat's receipt-based restore still recovers past ones (see
-// restorePurchases() below), unlike raw StoreKit.
-export const BLOCK_SINGLE_SKU = "block_single";
-export const BLOCK_BUNDLE_THREE_SKU = "block_bundle_three";
-
-// How many blocks each product grants — the only place this mapping lives, used by
-// both the buy flow and restore-reconciliation so they can't drift from each other.
-export const BLOCKS_GRANTED: Record<string, number> = {
-  [BLOCK_SINGLE_SKU]: 1,
-  [BLOCK_BUNDLE_THREE_SKU]: 3,
-};
 
 let configured = false;
 
@@ -68,42 +56,70 @@ export async function forgetPurchaser() {
   }
 }
 
-export async function getBlockPackages(): Promise<{
-  single: PurchasesPackage | null;
-  bundle: PurchasesPackage | null;
-}> {
+export type BlockOffer = { product: BlockProduct; pkg: PurchasesPackage | null };
+
+// The store packages for what someone owning blocks 1..owned can buy next: the
+// next single block, and the bundle starting at that block if there is one. Every
+// product has to be in RevenueCat's current Offering; a product missing from it
+// comes back with pkg: null, and the Plans screen treats it as not buyable yet.
+export async function getNextOffers(owned: number): Promise<{ single: BlockOffer | null; bundle: BlockOffer | null }> {
+  const { single, bundle } = nextOffers(owned);
   const offerings = await Purchases.getOfferings();
   const pkgs = offerings.current?.availablePackages ?? [];
-  return {
-    single: pkgs.find((p) => p.product.identifier === BLOCK_SINGLE_SKU) ?? null,
-    bundle: pkgs.find((p) => p.product.identifier === BLOCK_BUNDLE_THREE_SKU) ?? null,
-  };
+  const withPkg = (p: BlockProduct | null): BlockOffer | null =>
+    p ? { product: p, pkg: pkgs.find((k) => k.product.identifier === p.id) ?? null } : null;
+  return { single: withPkg(single), bundle: withPkg(bundle) };
 }
 
-// Buys a package and hands back the specific transaction it created (by identifier,
-// most recent first) — the caller uses its transactionIdentifier as the Purchase.id
-// passed to appState.commitPurchase(), so a duplicated purchase-update event upserts
-// onto the same Supabase row instead of double-crediting blocks.
-export async function buyBlockPackage(pkg: PurchasesPackage) {
-  const { customerInfo } = await Purchases.purchasePackage(pkg);
-  return latestTransactionFor(customerInfo, pkg.product.identifier);
+// Buys one block product. Resolves once the store confirms it, with the purchase
+// date the store recorded; the caller turns that into a Purchase record.
+export async function buyBlockProduct(pkg: PurchasesPackage): Promise<{ productId: string; date: string }> {
+  const { productIdentifier, transaction } = await Purchases.purchasePackage(pkg);
+  return { productId: productIdentifier, date: transaction?.purchaseDate ?? new Date().toISOString() };
 }
 
-// RevenueCat parses the full store receipt, so unlike raw StoreKit this recovers
-// consumable purchases too — every block-purchase transaction tied to this Apple ID
-// / Google account, not just ones still "unconsumed". Returns only the ones this
-// app's product catalog recognizes, most recent first.
-export async function restorePurchases() {
+// Every block product this store account owns, according to the store. Used by
+// Restore purchases; non-consumables are always reported, on any device signed
+// into the same Apple ID / Google account.
+export async function restoreBlockProducts(): Promise<{ productId: string; date: string }[]> {
   const customerInfo = await Purchases.restorePurchases();
-  return customerInfo.nonSubscriptionTransactions
-    .filter((t) => t.productIdentifier in BLOCKS_GRANTED)
-    .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime());
+  return ownedTransactions(customerInfo).map((t) => ({ productId: t.productIdentifier, date: t.purchaseDate }));
 }
 
-function latestTransactionFor(customerInfo: CustomerInfo, productIdentifier: string) {
-  return customerInfo.nonSubscriptionTransactions
-    .filter((t) => t.productIdentifier === productIdentifier)
-    .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())[0];
+// One per catalog product, earliest purchase first — a non-consumable is owned
+// once, but a store can list a re-download or a Family Sharing copy separately.
+function ownedTransactions(customerInfo: CustomerInfo) {
+  const seen = new Set<string>();
+  return [...customerInfo.nonSubscriptionTransactions]
+    .filter((t) => productFor(t.productIdentifier))
+    .sort((a, b) => new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime())
+    .filter((t) => (seen.has(t.productIdentifier) ? false : (seen.add(t.productIdentifier), true)));
+}
+
+// The purchases table's id is a uuid, and a non-consumable is owned once per
+// account, so the id is derived from (account, product): buying on one phone and
+// restoring on another write the same row instead of two. Signed-out (no account
+// yet) falls back to a random id, the same as every other client-created record.
+export async function purchaseId(userId: string | null, productId: string): Promise<string> {
+  if (!userId) return Crypto.randomUUID();
+  const hex = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `firsttimer-purchase:${userId}:${productId}`);
+  // RFC 9562 layout, version 8 (application-defined), variant 10xx.
+  const v = `8${hex.slice(13, 16)}`;
+  const variant = ((parseInt(hex[16], 16) & 0x3) | 0x8).toString(16) + hex.slice(17, 20);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${v}-${variant}-${hex.slice(20, 32)}`;
+}
+
+// The Purchase record for owning a product — the only shape Plans, Restore and the
+// dev unlock all commit, so the three can't disagree.
+export async function purchaseRecord(userId: string | null, product: BlockProduct, date: string): Promise<Purchase> {
+  return {
+    id: await purchaseId(userId, product.id),
+    label: productLabel(product),
+    price: product.price,
+    blocks: product.blocks.length,
+    productId: product.id,
+    date,
+  };
 }
 
 // The modern replacement for the deprecated PurchasesError.userCancelled boolean.
