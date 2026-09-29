@@ -30,6 +30,7 @@ import {
 } from "./contentCache";
 import { AWAY_DAYS, convertHistoryUnits, convertProfileWeight, devSeedNearBlockEnd, recoveryProtectedDays } from "./sessionEngine";
 import { setHapticsEnabled } from "./haptics";
+import { applySignupDetails } from "./signupDetails";
 import { setSoundsEnabled } from "./sound";
 import { GYM_PROGRAM, Program, selectProgram } from "./gymProgram";
 import { ActiveWorkout, Friend, HistoryEntry, MobilityEntry, Profile, Purchase, Settings, WalkEntry, WeighIn } from "./types";
@@ -191,11 +192,6 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     latest.current = { profile, block, session, streak, lastDate };
   });
 
-  // The name/units typed at sign-up, held here when email confirmation is required
-  // (signUp returns no session in that case, so there's nothing to push to yet).
-  // Applied the moment a real, confirmed session shows up.
-  const pendingSignup = useRef<{ name: string; units: Profile["units"]; age: number | null } | null>(null);
-
   // Guards the write-through cache effect below against a real race: setUserId
   // commits (and can render) before the async cache read resolves, and without
   // this guard that in-between render — userId set, profile still the in-memory
@@ -252,16 +248,15 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       const remote = await fetchRemoteState(uid);
       if (remote) {
         let profileToUse = remote.profile;
-        // The name/units they typed at sign-up never made it to the server if
-        // email confirmation was required — apply it now that we have a real session.
-        if (!remote.profile.name && pendingSignup.current) {
-          profileToUse = {
-            ...remote.profile,
-            name: pendingSignup.current.name,
-            units: pendingSignup.current.units,
-            age: pendingSignup.current.age,
-          };
-          pendingSignup.current = null;
+        // Sign-up details normally land in the profile row via the database
+        // trigger (migration 017). Until 017 has run, the row starts blank — so
+        // fill it from what signUp stored on the account itself. That copy lives
+        // in Supabase, so unlike an in-memory hold it survives email confirmation
+        // and app restarts, and this simply retries on every load until it lands.
+        const { data } = await supabase.auth.getSession();
+        const withSignup = applySignupDetails(remote.profile, data.session?.user.user_metadata);
+        if (withSignup !== remote.profile) {
+          profileToUse = withSignup;
           pushProfile(uid, profileToUse, {
             block: remote.block,
             session: remote.session,
@@ -660,12 +655,11 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, name: string, units: Profile["units"], age: number | null) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    // name/units/age travel with the sign-up itself (stored on the account as user
+    // metadata), and the database trigger copies them into the new profile row —
+    // nothing is held in app memory waiting for a first sign-in (migration 017).
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name, units, age } } });
     if (error) return { error: error.message, needsEmailConfirm: false };
-    // Hold the name/units/age here; onAuthStateChange -> hydrateFrom applies and pushes
-    // them the moment a real session exists (immediately if email confirmation is
-    // off, or after they confirm and sign in for real if it's on).
-    pendingSignup.current = { name, units, age };
     return { error: null, needsEmailConfirm: !data.session };
   };
 

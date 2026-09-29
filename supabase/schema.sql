@@ -317,15 +317,29 @@ on shop_items
 for select
 using (auth.role() = 'authenticated');
 
--- Auto-create a blank profile row the moment someone signs up, so the app never has
--- to handle "signed in but no profile row yet".
-create or replace function handle_new_user()
-returns trigger as $$
+-- Auto-create the profile row the moment someone signs up, so the app never has
+-- to handle "signed in but no profile row yet" — filled with the name, units and
+-- age sent with the sign-up (raw_user_meta_data), each checked (migration 017).
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  meta jsonb := coalesce(new.raw_user_meta_data, '{}'::jsonb);
+  age_text text := meta ->> 'age';
 begin
-  insert into public.profiles (id) values (new.id);
+  insert into public.profiles (id, name, units, age)
+  values (
+    new.id,
+    coalesce(trim(meta ->> 'name'), ''),
+    case when meta ->> 'units' in ('imperial', 'metric') then meta ->> 'units' else 'imperial' end,
+    case when age_text ~ '^[0-9]{1,3}$' and age_text::int between 13 and 120 then age_text::int end
+  );
   return new;
 end;
-$$ language plpgsql security definer;
+$$;
 
 create trigger on_auth_user_created
   after insert on auth.users
