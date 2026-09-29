@@ -7,8 +7,6 @@ import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing, type } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import {
-  BLOCK_SESSIONS,
-  MUSCLES,
   PRICE_ONE,
   PRICE_THREE,
   buildSession,
@@ -32,32 +30,33 @@ import Sheet from "../components/workout/Sheet";
 // bank is ported, per lib/gymProgram.ts's own header comment), so this screen
 // doesn't build a chip-driven "current program" switch. Hyrox/Marathon get their
 // real prototype treatment instead: the "Other first times" notify-me cards,
-// now driven by the real `programs` table (migration 009) — adding a fourth
-// program later is an INSERT there, not a code change here.
+// driven by the `categories` table (migration 013) — adding a fourth category
+// later is an INSERT there, not a code change here. Everything above those
+// cards describes appState.program, the plan for where the person trains.
 export default function ProgramsScreen() {
   const { colors } = useTheme();
   const appState = useAppState();
   const navigation = useNavigation<any>();
-  const { block, session, history, profile, purchases, notify, movementBank } = appState;
+  const { block, session, history, profile, purchases, notify, program } = appState;
   const [openMove, setOpenMove] = useState<string | null>(null);
 
-  const wpb = weeksPerBlock();
+  const wpb = weeksPerBlock(program.blockSessions);
   const days = daysPer();
   const wk = weekOf(session);
   const doneInBlock = history.filter((h) => h.block === block).length;
-  const blockPct = Math.round((doneInBlock / BLOCK_SESSIONS) * 100);
+  const blockSessions = program.blockSessions;
+  const blockPct = Math.round((doneInBlock / blockSessions) * 100);
   const owned = ownedBlocks(purchases);
 
-  const sA = buildSession(movementBank, block, 0, profile.length, profile.reps, profile.pain);
-  const sB = buildSession(movementBank, block, 1, profile.length, profile.reps, profile.pain);
-  const sC = buildSession(movementBank, block, 2, profile.length, profile.reps, profile.pain);
-  const sessions = [sA, sB, sC];
+  // One built session per template in the rotation (A, B, C for gym).
+  const sessions = program.templates.map((_, i) => buildSession(program, block, i, profile.length, profile.reps, profile.pain));
+  const sessionCount = ["no", "one", "two", "three", "four", "five", "six", "seven"][sessions.length] ?? String(sessions.length);
   const doneLetters: Record<string, number> = {};
   history.filter((h) => h.block === block).forEach((h) => {
     doneLetters[h.letter] = (doneLetters[h.letter] || 0) + 1;
   });
 
-  const allMoves: Record<string, (typeof sA.moves)[number]> = {};
+  const allMoves: Record<string, (typeof sessions)[number]["moves"][number]> = {};
   sessions.forEach((s) => s.moves.forEach((m) => (allMoves[m.n] = m)));
   const moveNames = Object.keys(allMoves);
   const openM = openMove ? allMoves[openMove] : null;
@@ -75,7 +74,7 @@ export default function ProgramsScreen() {
         <Card>
           <View style={styles.rowTop}>
             <Text style={[styles.gymTitle, { color: colors.ink, fontFamily: fonts.display }]}>
-              Gym · Block {block}
+              {program.name} · Block {block}
             </Text>
             <View style={[styles.badge, { backgroundColor: colors.sunken }]}>
               <Text style={{ color: colors.ink2, fontSize: 11, fontFamily: fonts.bodyBold }}>
@@ -89,9 +88,9 @@ export default function ProgramsScreen() {
 
           <View style={styles.progressLabelRow}>
             <Text style={{ color: colors.ink2, fontSize: 12, fontFamily: fonts.bodySemiBold }}>
-              Session {Math.min(session + 1, BLOCK_SESSIONS)} of {BLOCK_SESSIONS}
+              Session {Math.min(session + 1, blockSessions)} of {blockSessions}
             </Text>
-            <Text style={{ color: colors.muted, fontSize: 12 }}>{BLOCK_SESSIONS - doneInBlock} to go</Text>
+            <Text style={{ color: colors.muted, fontSize: 12 }}>{blockSessions - doneInBlock} to go</Text>
           </View>
           <View style={[styles.track, { backgroundColor: colors.sunken }]}>
             <View style={[styles.fill, { backgroundColor: colors.accent, width: `${blockPct}%` }]} />
@@ -103,7 +102,7 @@ export default function ProgramsScreen() {
               const cells = [];
               for (let dd = 0; dd < days; dd++) {
                 const idx = (w - 1) * days + dd;
-                if (idx >= BLOCK_SESSIONS) break;
+                if (idx >= blockSessions) break;
                 const done = history.some((h) => h.block === block && h.idx === idx);
                 cells.push({ done, now: idx === session });
               }
@@ -151,7 +150,7 @@ export default function ProgramsScreen() {
           <View style={[styles.infoRow, { borderTopColor: colors.line }]}>
             <Text style={[styles.infoK, { color: colors.ink2 }]}>Rotation</Text>
             <Text style={[styles.infoV, { color: colors.ink, fontFamily: fonts.monoBold }]}>
-              {sA.letter}{sB.letter}{sC.letter}
+              {sessions.map((s) => s.letter).join("")}
             </Text>
           </View>
           <View style={[styles.infoRow, { borderTopColor: colors.line }]}>
@@ -162,7 +161,7 @@ export default function ProgramsScreen() {
                 {block >= 2 ? "Eight reps, heavier than block 1" : "Ten reps, two sets in week 1 then three"}
               </Text>
             </Text>
-            <Text style={[styles.infoV, { color: colors.ink, fontFamily: fonts.monoBold }]}>{sA.moves[0]?.spec}</Text>
+            <Text style={[styles.infoV, { color: colors.ink, fontFamily: fonts.monoBold }]}>{sessions[0]?.moves[0]?.spec}</Text>
           </View>
           <View style={[styles.infoRow, { borderTopColor: colors.line }]}>
             <Text style={[styles.infoK, { color: colors.ink2 }]}>Equipment</Text>
@@ -185,9 +184,9 @@ export default function ProgramsScreen() {
         </TouchableOpacity>
 
         <Card style={{ marginTop: spacing.md }}>
-          <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display }]}>The three sessions</Text>
+          <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display }]}>The {sessionCount} sessions</Text>
           <Text style={[styles.note, { color: colors.muted }]}>
-            They rotate A, B, C. Every movement has a video, a swap if the machine's taken, and an easier version.
+            They rotate {sessions.map((s) => s.letter).join(", ")}. Every movement has a video, a swap if the machine's taken, and an easier version.
           </Text>
           {sessions.map((s, i) => (
             <SessionAccordion key={s.letter} s={s} count={doneLetters[s.letter] || 0} first={i === 0} colors={colors} />
@@ -277,12 +276,12 @@ export default function ProgramsScreen() {
         </TouchableOpacity>
 
         <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display, marginTop: spacing.lg }]}>Other first times</Text>
-        {appState.programs
-          .filter((p) => !p.live)
+        {appState.categories
+          .filter((c) => !c.live)
           .map((o) => {
-            const on = !!notify[o.category];
+            const on = !!notify[o.key];
             return (
-              <Card key={o.category} style={{ marginTop: spacing.sm, flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <Card key={o.key} style={{ marginTop: spacing.sm, flexDirection: "row", alignItems: "center", gap: 12 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>{o.name.toUpperCase()}</Text>
                   <Text style={[styles.moveCue, { color: colors.muted }]}>{o.sub}. First block free when it lands.</Text>
@@ -292,7 +291,7 @@ export default function ProgramsScreen() {
                   style={[styles.notifyBtn, { borderColor: on ? colors.accent : colors.line }, on && { backgroundColor: colors.accentSoft }]}
                   onPress={() => {
                     Haptics.selectionAsync().catch(() => {});
-                    appState.toggleProgramNotify(o.category);
+                    appState.toggleProgramNotify(o.key);
                   }}
                 >
                   <Text style={{ color: on ? colors.accentDeep : colors.ink, fontSize: 12, fontFamily: fonts.bodyBold }}>
@@ -309,7 +308,7 @@ export default function ProgramsScreen() {
           <>
             <Text style={[styles.sheetTitle, { color: colors.ink, fontFamily: fonts.display }]}>{openMove}</Text>
             <Text style={[styles.sheetBody, { color: colors.ink2 }]}>
-              {MUSCLES[openMove as string] || MUSCLES[openM.orig?.n || ""] || "Same muscles as the gym version of this movement."}
+              {openM.why || openM.orig?.why || "Same muscles as the gym version of this movement."}
             </Text>
             <Text style={[styles.sheetLine, { color: colors.ink }]}>
               <Text style={{ fontFamily: fonts.bodyBold }}>Cue: </Text>

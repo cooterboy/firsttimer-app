@@ -4,10 +4,10 @@ import { supabase, isSupabaseConfigured } from "./supabase";
 import {
   deleteSession as deleteSessionRemote,
   deleteWeighIn as deleteWeighInRemote,
+  CategoryInfo,
   fetchProgramContent,
   fetchRemoteState,
   fetchShopItems,
-  ProgramInfo,
   pushConnectedAccount,
   pushFriend,
   pushMobility,
@@ -31,16 +31,15 @@ import {
 import { AWAY_DAYS, convertHistoryUnits, convertProfileWeight, devSeedNearBlockEnd, recoveryProtectedDays } from "./sessionEngine";
 import { setHapticsEnabled } from "./haptics";
 import { setSoundsEnabled } from "./sound";
-import { BaseMovement, GYM, Letter } from "./gymProgram";
+import { GYM_PROGRAM, Program, selectProgram } from "./gymProgram";
 import { ActiveWorkout, Friend, HistoryEntry, MobilityEntry, Profile, Purchase, Settings, WalkEntry, WeighIn } from "./types";
 
-// Fallback program-info list — matches lib/gymProgram.ts's GYM-only reality
-// until migration 009's `programs` table is fetched. Real, live rows always
-// win once fetched; this only covers a fresh install with no network yet.
-const fallbackPrograms: ProgramInfo[] = [
-  { category: "gym", name: "Gym", sub: "24 sessions a block · strength", live: true },
-  { category: "hyrox", name: "Hyrox", sub: "12 weeks to race day", live: false },
-  { category: "marathon", name: "Marathon prep", sub: "16 weeks, one long run at a time", live: false },
+// Fallback category cards — the `categories` rows migration 013 carries over,
+// for a fresh install with no cache and no network yet. Fetched rows always win.
+const fallbackCategories: CategoryInfo[] = [
+  { key: "gym", name: "Gym", sub: "24 sessions a block · strength", live: true },
+  { key: "hyrox", name: "Hyrox", sub: "12 weeks to race day", live: false },
+  { key: "marathon", name: "Marathon prep", sub: "16 weeks, one long run at a time", live: false },
 ];
 
 // In-memory app state, mirroring the shape of the prototype's `state` object
@@ -103,8 +102,8 @@ type AppState = {
   connectedAccounts: Record<string, boolean>;
   notify: Record<string, boolean>;
   purchases: Purchase[];
-  movementBank: Record<Letter, BaseMovement[]>;
-  programs: ProgramInfo[];
+  program: Program; // the plan for profile.where — see selectProgram()
+  categories: CategoryInfo[];
   shopItems: ShopItem[];
   streak: number;
   lastDate: string | null;
@@ -167,12 +166,13 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [connectedAccounts, setConnectedAccounts] = useState<Record<string, boolean>>({});
   const [notify, setNotify] = useState<Record<string, boolean>>({});
   const [purchases, setPurchases] = useState<Purchase[]>([]);
-  // Content-as-data (migration 009): which programs exist, and the gym movement
-  // bank — fetched from Supabase, cached locally, falling back to
-  // lib/gymProgram.ts's own GYM constant only if a fresh install has neither a
-  // cache nor a network connection yet.
-  const [movementBank, setMovementBank] = useState<Record<Letter, BaseMovement[]>>(GYM);
-  const [programs, setPrograms] = useState<ProgramInfo[]>(fallbackPrograms);
+  // Content-as-data (migrations 013/014): the category cards and every live
+  // plan — fetched from Supabase, cached locally, falling back to
+  // lib/gymProgram.ts's GYM_PROGRAM only if a fresh install has neither a cache
+  // nor a network connection yet. `program` (below) is the one plan in use.
+  const [programs, setPrograms] = useState<Program[]>([GYM_PROGRAM]);
+  const [categories, setCategories] = useState<CategoryInfo[]>(fallbackCategories);
+  const program = useMemo(() => selectProgram(programs, profile.where), [programs, profile.where]);
   // Content-as-data (migration 012): gear/box-reorder items. No bundled fallback —
   // unlike the movement bank, an empty shop is an honest, expected state (no real
   // brand deals exist yet), not a broken one.
@@ -288,14 +288,14 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const loadProgramContent = async () => {
     const cached = await loadCachedProgramContent();
     if (cached) {
-      setMovementBank(cached.bank);
       setPrograms(cached.programs);
+      setCategories(cached.categories);
     }
     try {
       const fresh = await fetchProgramContent();
       if (fresh) {
-        setMovementBank(fresh.bank);
         setPrograms(fresh.programs);
+        setCategories(fresh.categories);
         saveCachedProgramContent(fresh).catch(() => {});
       }
     } catch (e) {
@@ -719,7 +719,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   // Dev-only: fabricate 23 sessions so the next real playthrough is session 24 —
   // lets you reach block-end/retest screens without grinding through the whole block.
   const devSeedNearBlockEndFn = () => {
-    const seeded = devSeedNearBlockEnd(block);
+    const seeded = devSeedNearBlockEnd(program, block);
     setHistory(seeded);
     setSession(seeded.length);
     setStreak(seeded.length);
@@ -741,8 +741,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       connectedAccounts,
       notify,
       purchases,
-      movementBank,
-      programs,
+      program,
+      categories,
       shopItems,
       streak,
       lastDate,
@@ -794,8 +794,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       connectedAccounts,
       notify,
       purchases,
-      movementBank,
-      programs,
+      program,
+      categories,
       shopItems,
       streak,
       lastDate,

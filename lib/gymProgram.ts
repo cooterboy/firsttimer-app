@@ -1,7 +1,8 @@
-// Ported verbatim from spec/prototype.html: the GYM movement bank (letters A/B/C),
+// Ported verbatim from spec/prototype.html: the GYM movement bank (sessions A/B/C),
 // the rep-style presets, and the pure functions that build a session from a block
-// and session index. Home/garage/hotel/outdoor variants exist in the prototype too
-// (HOME_DB, HOME_NONE) but aren't ported yet — v1's default profile is "gym".
+// and session index. Program content itself now comes from Supabase (migrations
+// 013/014, fetched in lib/sync.ts); GYM and MUSCLES here are only the offline
+// fallback for a fresh install with no cache and no network — see GYM_PROGRAM.
 
 export type MovementType = "weight" | "reps" | "time";
 
@@ -10,6 +11,19 @@ export type MovementVariant = {
   cue: string;
   type?: MovementType;
   perSide?: boolean;
+  why?: string;
+};
+
+// Per-slot prescription from template_movements.params. Every field is optional,
+// and an absent field means the prototype's name-based rule applies — so the gym
+// program, whose params are all empty, behaves exactly as the prototype does.
+// Only slots carry params; a swapped-in alternative always uses the name rules.
+export type MovementParams = {
+  equipment?: "dumbbell" | "machine"; // which first-weight hint startHint() gives
+  start_lb?: number; // starting dumbbell weight, in lb
+  single?: boolean; // one dumbbell rather than a pair
+  long_hold?: boolean; // timed holds start longer, as carries do
+  rep_cap?: number; // never prescribe more reps than this
 };
 
 export type BaseMovement = {
@@ -21,12 +35,24 @@ export type BaseMovement = {
   sub?: MovementVariant;
   easier?: MovementVariant;
   pain?: Record<string, MovementVariant>;
+  why?: string;
+  params?: MovementParams;
 };
 
-export const LETTERS = ["A", "B", "C"] as const;
-export type Letter = (typeof LETTERS)[number];
+// One session in a program's rotation ("Session A"). `code` is what history
+// records, so it's stable; the rotation order is the array order.
+export type SessionTemplate = { code: string; label: string; moves: BaseMovement[] };
 
-export const BLOCK_SESSIONS = 24;
+// A resolved plan — a `programs` row with its sessions and movements.
+export type Program = {
+  id: string;
+  category: string;
+  whereKeys: string[];
+  name: string;
+  blockSessions: number;
+  templates: SessionTemplate[];
+};
+
 export const PRICE_ONE = 9;
 export const PRICE_THREE = 19;
 
@@ -37,7 +63,7 @@ export function ownedBlocks(purchases: { blocks: number }[]): number {
   return 1 + purchases.reduce((a, p) => a + (p.blocks || 1), 0);
 }
 
-export const GYM: Record<Letter, BaseMovement[]> = {
+const GYM: Record<"A" | "B" | "C", BaseMovement[]> = {
   A: [
     {
       n: "Leg press",
@@ -179,7 +205,7 @@ export const GYM: Record<Letter, BaseMovement[]> = {
   ],
 };
 
-export const MUSCLES: Record<string, string> = {
+const MUSCLES: Record<string, string> = {
   "Leg press": "Quads and glutes. The safest way to load your legs on day one: the machine holds you, you push.",
   "Chest press machine": "Chest, front of shoulders, triceps. A fixed path so you learn the push before dumbbells.",
   "Seated row": "Upper back and biceps. Balances the pressing, and it's what keeps your shoulders back at a desk.",
@@ -195,6 +221,30 @@ export const MUSCLES: Record<string, string> = {
   "Chest-supported row": "Upper back. The pad takes your lower back out of it, so you can pull hard safely.",
   "Split squat": "Quads and glutes, one leg at a time. Fixes the side that's been coasting.",
   "Farmer carry": "Grip, core, upper back. Walking with heavy things is the oldest exercise there is.",
+};
+
+// The offline fallback: the same content migration 014 put in the database,
+// shaped the way lib/sync.ts shapes fetched content — including `why` on every
+// movement and alternative whose exercise has one, as exercises.why does.
+function withWhy<T extends { n: string; why?: string }>(v: T): T {
+  return MUSCLES[v.n] ? { ...v, why: MUSCLES[v.n] } : v;
+}
+export const GYM_PROGRAM: Program = {
+  id: "gym",
+  category: "gym",
+  whereKeys: ["gym", "garage"],
+  name: "Gym",
+  blockSessions: 24,
+  templates: (["A", "B", "C"] as const).map((code) => ({
+    code,
+    label: `Session ${code}`,
+    moves: GYM[code].map((m) => ({
+      ...withWhy(m),
+      sub: m.sub && withWhy(m.sub),
+      easier: m.easier && withWhy(m.easier),
+      pain: m.pain && Object.fromEntries(Object.entries(m.pain).map(([k, v]) => [k, withWhy(v)])),
+    })),
+  })),
 };
 
 export const REP_STYLES = {
@@ -247,6 +297,39 @@ export const FIRST_DAY: Record<string, { title: string; body: string }[]> = {
 };
 export const firstDayGym = FIRST_DAY.gym;
 
+// Only the strength engine exists, so only gym-category plans can run — a hyrox
+// or marathon plan needs its own engine before it's selectable. A plan also has
+// to be complete: at least one session, every session with at least one
+// movement, and only the movement kinds this engine understands.
+const RUNNABLE_KINDS: MovementType[] = ["weight", "reps", "time"];
+export function isRunnable(p: Program): boolean {
+  return (
+    p.category === "gym" &&
+    p.templates.length > 0 &&
+    p.templates.every(
+      (t) =>
+        t.moves.length > 0 &&
+        t.moves.every(
+          (m) =>
+            RUNNABLE_KINDS.includes(m.type) &&
+            [m.sub, m.easier, ...Object.values(m.pain || {})].every((v) => !v || !v.type || RUNNABLE_KINDS.includes(v.type))
+        )
+    )
+  );
+}
+
+// The plan for where someone trains (migration 013): the first runnable plan
+// (programs arrive sorted by sort_order, live only) whose where_keys include
+// their `where`, else the gym plan — the prototype's `SETS[where] || GYM`.
+export function selectProgram(programs: Program[], where: string): Program {
+  const runnable = programs.filter(isRunnable);
+  return (
+    runnable.find((p) => p.whereKeys.includes(where)) ||
+    runnable.find((p) => p.whereKeys.includes("gym")) ||
+    GYM_PROGRAM
+  );
+}
+
 export function unit(units: "imperial" | "metric") {
   return units === "metric" ? "kg" : "lb";
 }
@@ -260,8 +343,8 @@ export function daysPer(): number {
 export function weekOf(idx: number): number {
   return Math.floor(idx / daysPer()) + 1;
 }
-export function weeksPerBlock(): number {
-  return Math.ceil(BLOCK_SESSIONS / daysPer());
+export function weeksPerBlock(blockSessions: number): number {
+  return Math.ceil(blockSessions / daysPer());
 }
 
 function repStyle(reps: RepStyleKey) {
@@ -279,23 +362,27 @@ export function setsFor(block: number, week: number, lengthMin: number): number 
   return block === 1 && week === 1 ? Math.max(2, setTarget - 1) : setTarget;
 }
 
-// prototype's specFor(): the "3 × 10" style label
+// prototype's specFor(): the "3 × 10" style label. params (see MovementParams)
+// override the prototype's name-based rules where set.
 export function specFor(
-  mv: { type: MovementType; n: string; perSide?: boolean },
+  mv: { type: MovementType; n: string; perSide?: boolean; params?: MovementParams },
   sets: number,
   block: number,
   reps: RepStyleKey
 ): string {
   const st = repStyle(reps);
   const i = block >= 2 ? 1 : 0;
+  const p = mv.params || {};
   if (mv.type === "time") {
-    let s = /carry/i.test(mv.n) ? (sets === 2 ? 30 : 40) : sets === 2 ? 20 : 30;
+    const longHold = p.long_hold ?? /carry/i.test(mv.n);
+    let s = longHold ? (sets === 2 ? 30 : 40) : sets === 2 ? 20 : 30;
     if (block >= 2) s += 10;
     s = Math.round((s * st.t) / 5) * 5;
     return `${sets} × ${s} sec`;
   }
   let r: number = mv.type === "reps" ? st.r[i] : st.w[i];
-  if (/dead bug|bird dog/i.test(mv.n)) r = Math.min(r, 10);
+  const repCap = p.rep_cap ?? (/dead bug|bird dog/i.test(mv.n) ? 10 : null);
+  if (repCap != null) r = Math.min(r, repCap);
   return `${sets} × ${r}${mv.perSide ? "/side" : ""}`;
 }
 
@@ -304,7 +391,7 @@ export type SessionMovement = BaseMovement & { sets: number; spec: string; swapp
 export type BuiltSession = {
   block: number;
   idx: number;
-  letter: Letter;
+  letter: string; // the session template's code, e.g. "A"
   week: number;
   sets: number;
   moves: SessionMovement[];
@@ -312,30 +399,30 @@ export type BuiltSession = {
 
 const PAIN_LABEL: Record<string, string> = { back: "lower back" };
 
-// prototype's buildSession(), including the pain-substitution step. `bank` is
-// the movement library to build from — normally the app's fetched-from-Supabase
-// content (AppState.movementBank), falling back to this file's own GYM constant
-// only if that fetch (and its local cache) both come up empty. Threaded through
-// as a parameter rather than read from the module scope so this stays a pure
-// function of its inputs, same as the rest of this file.
+// prototype's buildSession(), including the pain-substitution step. `program` is
+// the plan to build from — normally fetched from Supabase (AppState.program),
+// falling back to GYM_PROGRAM only if that fetch and its local cache both come
+// up empty. Sessions rotate through the program's templates in order, so the
+// rotation length is however many templates the program has (A/B/C for gym).
 export function buildSession(
-  bank: Record<Letter, BaseMovement[]>,
+  program: Program,
   block: number,
   idx: number,
   lengthMin: number,
   reps: RepStyleKey,
   pain: string[] = []
 ): BuiltSession {
-  const letter = LETTERS[idx % 3];
+  const template = program.templates[idx % program.templates.length];
   const week = weekOf(idx);
   const sets = setsFor(block, week, lengthMin);
-  const moves: SessionMovement[] = (bank[letter] || []).map((m) => {
+  const moves: SessionMovement[] = template.moves.map((m) => {
     let mv: BaseMovement = { ...m };
     let swappedFor: string | null = null;
     pain.forEach((p) => {
       if (!swappedFor && m.pain && m.pain[p]) {
         const alt = m.pain[p];
-        mv = { ...m, ...alt, type: alt.type || m.type };
+        // params belong to the slot's own exercise, not the one swapped in.
+        mv = { ...m, ...alt, type: alt.type || m.type, params: undefined };
         swappedFor = p;
       }
     });
@@ -347,5 +434,5 @@ export function buildSession(
       orig: m,
     };
   });
-  return { block, idx, letter, week, sets, moves };
+  return { block, idx, letter: template.code, week, sets, moves };
 }

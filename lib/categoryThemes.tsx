@@ -2,12 +2,12 @@ import React from "react";
 import Svg, { Circle, Path } from "react-native-svg";
 import { ThemeColors } from "./theme";
 
-// The category a program belongs to — mirrors ProgramInfo["category"] (lib/sync.ts)
-// and the `programs` table (migration 009). Only "gym" has real session-building
-// content (lib/gymProgram.ts's own header comment); hyrox/marathon are scaffolding
-// until CLAUDE.md's "Reopened" programs actually ship real content. Adding a fourth
-// category later means adding a key here (and a programs-table row) — not touching
-// any screen that reads through useTheme().
+// The category a program belongs to — mirrors CategoryInfo["key"] (lib/sync.ts)
+// and the `categories` table (migration 013). Only "gym" has a session engine
+// (lib/gymProgram.ts's selectProgram only runs gym-category plans); hyrox/marathon
+// are scaffolding until CLAUDE.md's "Reopened" programs actually ship real content.
+// Adding a fourth category later means adding a key here (and a categories row) —
+// not touching any screen that reads through useTheme().
 export type CategoryKey = "gym" | "hyrox" | "marathon";
 
 export type CategoryTheme = {

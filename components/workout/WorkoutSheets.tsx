@@ -4,7 +4,7 @@ import * as Haptics from "../../lib/haptics";
 import { useTheme } from "../../lib/ThemeContext";
 import { fonts, spacing } from "../../lib/theme";
 import { ActiveMove, Profile, SheetState } from "../../lib/types";
-import { MUSCLES, MovementVariant, unit } from "../../lib/gymProgram";
+import { MovementVariant, unit } from "../../lib/gymProgram";
 import { MOVE_TAGS, WeightHint, startHint } from "../../lib/sessionEngine";
 
 function SheetTitle({ children }: { children: React.ReactNode }) {
@@ -182,7 +182,7 @@ export function NoteSheetContent({
 
 // ---- Movement info ----
 export function InfoSheetContent({ move, onClose }: { move: ActiveMove; onClose: () => void }) {
-  const why = MUSCLES[move.n] || MUSCLES[move.orig.n] || "Same muscles as the gym version of this movement.";
+  const why = move.why || move.orig.why || "Same muscles as the gym version of this movement.";
   return (
     <View>
       <SheetTitle>{move.n}</SheetTitle>

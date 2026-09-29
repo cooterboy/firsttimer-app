@@ -12,7 +12,7 @@ export default function AppHeader() {
   const { colors } = useTheme();
   const appState = useAppState();
   const navigation = useNavigation<any>();
-  const total = weeksPerBlock();
+  const total = weeksPerBlock(appState.program.blockSessions);
   const weekFilled = weekOf(appState.session) - 1;
   const initials = (appState.profile.name || "FT").slice(0, 2).toUpperCase();
 

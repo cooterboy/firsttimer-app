@@ -8,7 +8,7 @@ import Svg, { Circle, Line, Polyline, Rect, Text as SvgText } from "react-native
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing, type } from "../lib/theme";
 import { useAppState } from "../lib/appState";
-import { BLOCK_SESSIONS, daysPer, unit, weekOf, weeksPerBlock } from "../lib/gymProgram";
+import { Program, daysPer, unit, weekOf, weeksPerBlock } from "../lib/gymProgram";
 import {
   buildSessionForProfile,
   fmtDate,
@@ -67,7 +67,7 @@ export default function ProgressScreen() {
         <Text style={[styles.title, { color: colors.ink, fontFamily: fonts.display }]}>Progress</Text>
 
         {!hasAnything ? (
-          <EmptyState colors={colors} movementBank={appState.movementBank} block={block} profile={profile} />
+          <EmptyState colors={colors} program={appState.program} block={block} profile={profile} />
         ) : (
           <>
             <ProgressSeg value={tab} onChange={setTab} />
@@ -96,7 +96,7 @@ export default function ProgressScreen() {
               />
             ) : (
               <>
-                <Blocks colors={colors} block={block} session={session} history={history} />
+                <Blocks colors={colors} program={appState.program} block={block} session={session} history={history} />
                 <History
                   colors={colors}
                   history={history}
@@ -148,12 +148,12 @@ function ProgressSeg({ value, onChange }: { value: ProgressTab; onChange: (v: Pr
 
 function EmptyState({
   colors,
-  movementBank,
+  program,
   block,
   profile,
 }: {
   colors: ReturnType<typeof useTheme>["colors"];
-  movementBank: ReturnType<typeof useAppState>["movementBank"];
+  program: Program;
   block: number;
   profile: ReturnType<typeof useAppState>["profile"];
 }) {
@@ -168,7 +168,7 @@ function EmptyState({
     { k: "Every Sunday", s: "A recap: sessions, weight moved, what went up.", badge: "Weekly" },
     { k: "Whenever you want", s: "Body weight and progress photos. Both optional, both private.", badge: "Optional" },
   ];
-  const s0 = buildSessionForProfile(movementBank, block, 0, profile);
+  const s0 = buildSessionForProfile(program, block, 0, profile);
   return (
     <>
       <Card>
@@ -654,11 +654,13 @@ function MilestonesCard({ milestones }: { milestones: Milestone[] }) {
 
 function Blocks({
   colors,
+  program,
   block,
   session,
   history,
 }: {
   colors: ReturnType<typeof useTheme>["colors"];
+  program: Program;
   block: number;
   session: number;
   history: ReturnType<typeof useAppState>["history"];
@@ -675,14 +677,16 @@ function Blocks({
       {rows.map((r, i) => (
         <View key={r.b} style={[styles.row, i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.rowK, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Gym · Block {r.b}</Text>
+            <Text style={[styles.rowK, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>
+              {program.name} · Block {r.b}
+            </Text>
             <Text style={[styles.rowSub, { color: colors.muted }]}>
-              {r.n} of {BLOCK_SESSIONS} sessions{r.cur ? " · in progress" : ""}
+              {r.n} of {program.blockSessions} sessions{r.cur ? " · in progress" : ""}
             </Text>
           </View>
           <View style={[styles.badge, { backgroundColor: r.cur ? colors.sunken : colors.goodSoft }]}>
             <Text style={{ color: r.cur ? colors.muted : colors.good, fontSize: 10.5, fontWeight: "700" }}>
-              {r.cur ? `Week ${weekOf(session)} of ${weeksPerBlock()}` : "Done"}
+              {r.cur ? `Week ${weekOf(session)} of ${weeksPerBlock(program.blockSessions)}` : "Done"}
             </Text>
           </View>
         </View>

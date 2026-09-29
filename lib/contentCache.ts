@@ -7,14 +7,19 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ProgramContent, ShopItem } from "./sync";
 
-const CACHE_KEY = "@firsttimer/programContentCache";
+// v2: migration 013's shape ({ categories, programs }). The v1 key held 009's
+// { programs, bank } shape; it's simply never read again, and the first
+// successful fetch writes v2.
+const CACHE_KEY = "@firsttimer/programContentCache.v2";
 const SHOP_CACHE_KEY = "@firsttimer/shopItemsCache";
 
 export async function loadCachedProgramContent(): Promise<ProgramContent | null> {
   try {
     const raw = await AsyncStorage.getItem(CACHE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as ProgramContent;
+    const parsed = JSON.parse(raw) as ProgramContent;
+    if (!Array.isArray(parsed?.categories) || !Array.isArray(parsed?.programs)) return null;
+    return parsed;
   } catch (e) {
     console.warn("Program content cache read failed:", e);
     return null;

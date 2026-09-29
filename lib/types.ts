@@ -1,4 +1,4 @@
-import { BaseMovement, Letter, MovementType, RepStyleKey } from "./gymProgram";
+import { BaseMovement, MovementParams, MovementType, RepStyleKey } from "./gymProgram";
 
 export type Units = "imperial" | "metric";
 export type Goal = "lose" | "build" | "energy" | "habit" | "confidence" | "event";
@@ -10,13 +10,12 @@ export const GOAL_LABEL: Record<Goal, string> = {
   confidence: "Feel at home in a gym",
   event: "Training for an event",
 };
-// Matches the prototype's WHERE_LABEL keys. Only "gym" has its own movement bank
-// ported (lib/gymProgram.ts's GYM) — the others are real, settable choices (so the
-// data model and the UI aren't lying about what a beginner can pick), but session
-// building falls back to GYM for all of them, same as the prototype's own
-// `SETS[where] || GYM` fallback and its "Home programs are placeholders until the
-// trainer writes them" copy. Porting real home/garage/hotel/outside movement banks
-// is a separate, comparably-sized task, not done here.
+// Matches the prototype's WHERE_LABEL keys. `where` picks the plan: the first live
+// program whose where_keys include it (lib/gymProgram.ts's selectProgram), else
+// the gym plan — the prototype's `SETS[where] || GYM`. Only the gym plan (serving
+// gym and garage) exists so far, so every other choice still gets it, matching
+// the "Home programs are placeholders until the trainer writes them" copy. A home
+// plan is database content (a programs row), not code.
 export type Where = "gym" | "home_db" | "home_none" | "garage" | "hotel" | "outside";
 export const WHERE_LABEL: Record<Where, string> = {
   gym: "At a gym",
@@ -178,7 +177,7 @@ export type HistoryEntry = {
   id: string; // client-generated UUID — the sync identity for this record
   block: number;
   idx: number;
-  letter: Letter;
+  letter: string; // the session template's code, e.g. "A"
   week: number;
   date: string; // ISO
   moves: Record<string, HistoryMove>;
@@ -210,6 +209,8 @@ export type ActiveMove = {
   mtags?: string[];
   fb?: { kind: "up" | "down" | "same"; text: string } | null;
   perSide?: boolean;
+  why?: string; // "what it works" — exercises.why for whatever is being done now
+  params?: MovementParams; // the slot's own; cleared when an alternative is swapped in
   orig: BaseMovement;
 };
 
@@ -235,7 +236,7 @@ export type SheetState =
 export type ActiveWorkout = {
   block: number;
   idx: number;
-  letter: Letter;
+  letter: string;
   week: number;
   mi: number; // current move index
   moves: ActiveMove[];

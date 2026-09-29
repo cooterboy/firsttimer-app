@@ -5,7 +5,7 @@ import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing, type } from "../lib/theme";
-import { BLOCK_SESSIONS, daysPer, FIRST_DAY, ownedBlocks, PRICE_ONE, unit, weeksPerBlock } from "../lib/gymProgram";
+import { daysPer, FIRST_DAY, ownedBlocks, PRICE_ONE, Program, unit, weeksPerBlock } from "../lib/gymProgram";
 import {
   AWAY_DAYS,
   blockRecap,
@@ -84,7 +84,7 @@ export default function TodayScreen() {
   const gapDays = daysAway(appState.lastDate);
   const trainedToday = appState.history.some((h) => isSameDay(h.date, new Date()));
   const resume = !!appState.active && appState.active.block === appState.block && appState.active.idx === appState.session;
-  const built = buildSessionForProfile(appState.movementBank, appState.block, appState.session, appState.profile);
+  const built = buildSessionForProfile(appState.program, appState.block, appState.session, appState.profile);
   const isPlanDay = planDays().includes(dow);
   // Once any of the three comeback choices has been made, pendingComebackFactor is
   // set (immediately for two of them, ahead of time for "restart the block") — the
@@ -97,8 +97,8 @@ export default function TodayScreen() {
     isComeback(appState.history, appState.lastDate, appState.settings.paused, appState.profile.recoveryAdjustedAt);
   // Block finished, next block not owned — advanceBlock() no longer fires
   // automatically in this state (see WorkoutScreen.tsx's onDone), so session sits at
-  // BLOCK_SESSIONS until the person unlocks the next block or repeats this one.
-  const blockLocked = !comebackActive && !resume && appState.session >= BLOCK_SESSIONS && ownedBlocks(appState.purchases) <= appState.block;
+  // the block length until the person unlocks the next block or repeats this one.
+  const blockLocked = !comebackActive && !resume && appState.session >= appState.program.blockSessions && ownedBlocks(appState.purchases) <= appState.block;
   const mobDayActive =
     !comebackActive &&
     !blockLocked &&
@@ -192,6 +192,7 @@ export default function TodayScreen() {
     streak: appState.streak,
     session: appState.session,
     block: appState.block,
+    blockSessions: appState.program.blockSessions,
     lastDate: appState.lastDate,
     paused: appState.settings.paused,
     isPlanDay,
@@ -274,7 +275,7 @@ export default function TodayScreen() {
         {!comebackActive &&
         !blockLocked &&
         appState.block === 1 &&
-        built.week >= weeksPerBlock() - 2 &&
+        built.week >= weeksPerBlock(appState.program.blockSessions) - 2 &&
         ownedBlocks(appState.purchases) < 2 ? (
           <View style={[styles.pausedBanner, { backgroundColor: colors.sunken }]}>
             <Text style={{ color: colors.ink, fontSize: 13, lineHeight: 19, marginBottom: 8 }}>
@@ -345,6 +346,7 @@ export default function TodayScreen() {
             colors={colors}
             history={appState.history}
             block={appState.block}
+            blockSessions={appState.program.blockSessions}
             owned={ownedBlocks(appState.purchases)}
             units={appState.profile.units}
             onUnlock={() => navigation.navigate("Programs", { screen: "Plans" })}
@@ -357,7 +359,7 @@ export default function TodayScreen() {
         ) : trainedToday && !resume ? (
           <DoneForTodayCard
             colors={colors}
-            movementBank={appState.movementBank}
+            program={appState.program}
             block={appState.block}
             session={appState.session}
             profile={appState.profile}
@@ -600,21 +602,21 @@ function WeekStrip({
 
 function DoneForTodayCard({
   colors,
-  movementBank,
+  program,
   block,
   session,
   profile,
   history,
 }: {
   colors: ReturnType<typeof useTheme>["colors"];
-  movementBank: ReturnType<typeof useAppState>["movementBank"];
+  program: Program;
   block: number;
   session: number;
   profile: ReturnType<typeof useAppState>["profile"];
   history: ReturnType<typeof useAppState>["history"];
 }) {
   const nt = nextTrainingDay();
-  const next = buildSessionForProfile(movementBank, block, session, profile);
+  const next = buildSessionForProfile(program, block, session, profile);
   const last = history[history.length - 1];
   return (
     <Card style={styles.sessionCard}>
@@ -842,6 +844,7 @@ function BlockLockedCard({
   colors,
   history,
   block,
+  blockSessions,
   owned,
   units,
   onUnlock,
@@ -850,12 +853,13 @@ function BlockLockedCard({
   colors: ReturnType<typeof useTheme>["colors"];
   history: ReturnType<typeof useAppState>["history"];
   block: number;
+  blockSessions: number;
   owned: number;
   units: "imperial" | "metric";
   onUnlock: () => void;
   onRepeat: () => void;
 }) {
-  const recap = blockRecap(history, block);
+  const recap = blockRecap(history, block, blockSessions);
   return (
     <Card style={styles.sessionCard}>
       <View style={[styles.sessionTop, { backgroundColor: colors.ink }]}>
@@ -865,7 +869,7 @@ function BlockLockedCard({
           </View>
         </View>
         <Text style={[styles.sessionTitle, { color: "#fff", fontFamily: fonts.display }]}>Block {block} done.</Text>
-        <Text style={[styles.sessionSub, { color: "#fff" }]}>{BLOCK_SESSIONS} sessions. Here's what that built.</Text>
+        <Text style={[styles.sessionSub, { color: "#fff" }]}>{blockSessions} sessions. Here's what that built.</Text>
       </View>
       <View style={{ padding: 18 }}>
         <RecapCard recap={recap} label={`Block ${block}`} units={units} />

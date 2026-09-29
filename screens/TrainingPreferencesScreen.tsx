@@ -44,7 +44,7 @@ export default function TrainingPreferencesScreen() {
     length <= 30 ? "2 sets of everything." : length >= 60 ? "4 sets, 3 in your first week." : "3 sets, 2 in your first week.";
 
   const nextSession = buildSession(
-    appState.movementBank,
+    appState.program,
     appState.block,
     appState.session,
     appState.profile.length,

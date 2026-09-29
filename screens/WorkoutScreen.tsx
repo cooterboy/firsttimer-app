@@ -17,7 +17,7 @@ import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import { useWorkoutModal } from "../lib/workoutModal";
 import { ActiveMove, ActiveWorkout, SheetState } from "../lib/types";
-import { BLOCK_SESSIONS, MovementVariant, daysPer, ownedBlocks, specFor, step as stepFor, unit as unitFor } from "../lib/gymProgram";
+import { MovementVariant, daysPer, ownedBlocks, specFor, step as stepFor, unit as unitFor } from "../lib/gymProgram";
 import {
   buildSessionForProfile,
   coachRead,
@@ -72,7 +72,7 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
     if (appState.active && appState.active.block === appState.block && appState.active.idx === appState.session) {
       setWo(appState.active);
     } else {
-      const built = buildSessionForProfile(appState.movementBank, appState.block, appState.session, appState.profile);
+      const built = buildSessionForProfile(appState.program, appState.block, appState.session, appState.profile);
       const comebackFactor = workoutModal.pendingComebackFactor ?? undefined;
       const fresh = newActiveWorkout(built, appState.profile, appState.settings, appState.history, comebackFactor);
       appState.setActive(fresh);
@@ -102,9 +102,9 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
     const entry = logSessionEntry(wo);
     const historyWithEntry = [...appState.history, entry];
     const real = wo.moves.filter((m) => !isWarmup(m));
-    const blockDone = appState.session + 1 >= BLOCK_SESSIONS;
+    const blockDone = appState.session + 1 >= appState.program.blockSessions;
     const milestone = (wo.idx + 1) % (daysPer() * 4) === 0;
-    const fc = finishCopy(wo, real, blockDone, milestone, historyWithEntry, appState.profile);
+    const fc = finishCopy(wo, real, blockDone, milestone, historyWithEntry, appState.profile, appState.program.blockSessions);
     appState.commitSession(entry);
     const loggedWo = { ...wo, logged: true, fc };
     setWo(loggedWo);
@@ -388,9 +388,9 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
                 if (!entry) return null;
                 const firstSame = appState.history.find((h) => h.block === wo.block && h.letter === wo.letter);
                 const isFirst = !!firstSame && firstSame.idx === wo.idx;
-                const blockDone = appState.session >= BLOCK_SESSIONS;
+                const blockDone = appState.session >= appState.program.blockSessions;
                 const coachLines = coachRead(wo, real, isFirst, appState.history, profile);
-                const np = nextPreview(appState.movementBank, appState.block, appState.session, profile);
+                const np = nextPreview(appState.program, appState.block, appState.session, profile);
                 return (
                   <FinishView
                     wo={wo}

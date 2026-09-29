@@ -7,7 +7,7 @@ import * as Haptics from "../lib/haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
-import { BLOCK_SESSIONS, unit } from "../lib/gymProgram";
+import { unit } from "../lib/gymProgram";
 import { buildBackfillEntry, buildSessionForProfile } from "../lib/sessionEngine";
 
 function daysAgo(n: number): Date {
@@ -24,14 +24,14 @@ export default function BackfillScreen() {
   const { colors } = useTheme();
   const appState = useAppState();
   const navigation = useNavigation<any>();
-  const { block, session, profile, movementBank } = appState;
+  const { block, session, profile, program } = appState;
 
   const [date, setDate] = useState(daysAgo(1));
   const [showPicker, setShowPicker] = useState(false);
   const [weights, setWeights] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
-  if (session >= BLOCK_SESSIONS) {
+  if (session >= program.blockSessions) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
         <TopBar colors={colors} onBack={() => navigation.goBack()} />
@@ -44,7 +44,7 @@ export default function BackfillScreen() {
     );
   }
 
-  const built = buildSessionForProfile(movementBank, block, session, profile);
+  const built = buildSessionForProfile(program, block, session, profile);
   const real = built.moves;
   const u = unit(profile.units);
 
@@ -61,7 +61,7 @@ export default function BackfillScreen() {
       return;
     }
     setSubmitting(true);
-    const entry = buildBackfillEntry(movementBank, block, session, profile, date, weights);
+    const entry = buildBackfillEntry(program, block, session, profile, date, weights);
     appState.commitBackfill(entry);
     setSubmitting(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});

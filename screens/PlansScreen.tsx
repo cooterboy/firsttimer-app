@@ -31,7 +31,7 @@ export default function PlansScreen() {
   const [buying, setBuying] = useState(false);
 
   const { history, profile, purchases, session } = appState;
-  const wpb = weeksPerBlock();
+  const wpb = weeksPerBlock(appState.program.blockSessions);
   const owned = ownedBlocks(purchases);
   const u = unit(profile.units);
   const proof = history.length >= 6 ? retestSummary(history, profile.units) : null;

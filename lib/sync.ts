@@ -5,7 +5,7 @@
 
 import { supabase } from "./supabase";
 import { Friend, HistoryEntry, MobilityEntry, Profile, Purchase, Settings, WalkEntry, WalkKind, WeighIn } from "./types";
-import { BaseMovement, Letter, MovementType, MovementVariant } from "./gymProgram";
+import { BaseMovement, MovementParams, MovementType, MovementVariant, Program } from "./gymProgram";
 
 type ProfileRow = {
   id: string;
@@ -361,83 +361,127 @@ export async function resetTestData(userId: string) {
   if (profErr) throw profErr;
 }
 
-type ProgramRow = { category: string; name: string; sub: string; live: boolean };
-type SessionTemplateRow = { id: string; category: string; letter: string; label: string; order_index: number };
-type MovementRow = {
+// Content tables (migrations 013/014), in the nested shape PROGRAM_SELECT returns.
+type CategoryRow = { key: string; name: string; sub: string; live: boolean; sort_order: number };
+type ExerciseRow = { name: string; cue: string; why: string | null };
+type AlternativeRow = {
+  reason: string;
+  pain_area: string | null;
+  kind: string | null;
+  per_side: boolean | null;
+  cue_override: string | null;
+  exercise: ExerciseRow;
+};
+type TemplateMovementRow = {
+  position: number;
+  kind: string;
+  rest_sec: number | null;
+  per_side: boolean;
+  cue_override: string | null;
+  params: MovementParams | null;
+  exercise: ExerciseRow;
+  movement_alternatives: AlternativeRow[];
+};
+export type ProgramRow = {
   id: string;
   category: string;
-  session_template_id: string;
-  order_index: number;
-  n: string;
-  cue: string;
-  type: string;
-  rest: number;
-  per_side: boolean;
-  sub: MovementVariantJson | null;
-  easier: MovementVariantJson | null;
-  pain: Record<string, MovementVariantJson> | null;
-  video_url: string | null;
+  where_keys: string[];
+  name: string;
+  block_sessions: number;
+  sort_order: number;
+  session_templates: { code: string; label: string; position: number; template_movements: TemplateMovementRow[] }[];
 };
-type MovementVariantJson = { n: string; cue: string; type?: string; perSide?: boolean };
 
-export type ProgramInfo = { category: string; name: string; sub: string; live: boolean };
+// A `categories` row — one card on the Programs tab (gym live; hyrox/marathon
+// "Tell me" cards until they ship).
+export type CategoryInfo = { key: string; name: string; sub: string; live: boolean };
 export type ProgramContent = {
-  programs: ProgramInfo[];
-  bank: Record<Letter, BaseMovement[]>;
+  categories: CategoryInfo[];
+  programs: Program[]; // live plans only, in sort_order
 };
 
-function rowToVariant(v: MovementVariantJson): MovementVariant {
-  return { n: v.n, cue: v.cue, type: v.type as MovementType | undefined, perSide: v.perSide };
+// Both exercise embeds name their foreign key: movement_alternatives links
+// template_movements to exercises, so PostgREST would otherwise also see a
+// many-to-many path between them and refuse the embed as ambiguous.
+const PROGRAM_SELECT = `
+  id, category, where_keys, name, block_sessions, sort_order,
+  session_templates (
+    code, label, position,
+    template_movements (
+      position, kind, rest_sec, per_side, cue_override, params,
+      exercise:exercises!template_movements_exercise_id_fkey ( name, cue, why ),
+      movement_alternatives (
+        reason, pain_area, kind, per_side, cue_override,
+        exercise:exercises!movement_alternatives_exercise_id_fkey ( name, cue, why )
+      )
+    )
+  )`;
+
+const byPosition = (a: { position: number }, b: { position: number }) => a.position - b.position;
+
+// Null columns become absent keys, not `undefined` values: buildSession spreads
+// an alternative over its slot, and an explicit undefined would erase the
+// slot's value instead of inheriting it (the prototype's `alt.type || m.type`).
+function rowToVariant(a: AlternativeRow): MovementVariant {
+  const v: MovementVariant = { n: a.exercise.name, cue: a.cue_override ?? a.exercise.cue };
+  if (a.kind) v.type = a.kind as MovementType;
+  if (a.per_side !== null) v.perSide = a.per_side;
+  if (a.exercise.why) v.why = a.exercise.why;
+  return v;
 }
 
-function rowToBaseMovement(row: MovementRow): BaseMovement {
-  const pain = row.pain
-    ? Object.fromEntries(Object.entries(row.pain).map(([k, v]) => [k, rowToVariant(v)]))
-    : undefined;
+function rowToBaseMovement(row: TemplateMovementRow): BaseMovement {
+  const alts = row.movement_alternatives || [];
+  const swap = alts.find((a) => a.reason === "swap");
+  const easier = alts.find((a) => a.reason === "easier");
+  const pain = alts.filter((a) => a.reason === "pain" && a.pain_area);
+  const m: BaseMovement = {
+    n: row.exercise.name,
+    cue: row.cue_override ?? row.exercise.cue,
+    type: row.kind as MovementType,
+    rest: row.rest_sec ?? 0, // 0 → the user's default rest (prepareWorkoutMoves)
+  };
+  if (row.per_side) m.perSide = true;
+  if (swap) m.sub = rowToVariant(swap);
+  if (easier) m.easier = rowToVariant(easier);
+  if (pain.length) m.pain = Object.fromEntries(pain.map((a) => [a.pain_area as string, rowToVariant(a)]));
+  if (row.exercise.why) m.why = row.exercise.why;
+  if (row.params && Object.keys(row.params).length) m.params = row.params;
+  return m;
+}
+
+// Pure, so it can be tested against real rows without a Supabase connection.
+export function rowsToProgram(row: ProgramRow): Program {
   return {
-    n: row.n,
-    cue: row.cue,
-    type: row.type as BaseMovement["type"],
-    rest: row.rest,
-    perSide: row.per_side || undefined,
-    sub: row.sub ? rowToVariant(row.sub) : undefined,
-    easier: row.easier ? rowToVariant(row.easier) : undefined,
-    pain,
+    id: row.id,
+    category: row.category,
+    whereKeys: row.where_keys,
+    name: row.name,
+    blockSessions: row.block_sessions,
+    templates: [...(row.session_templates || [])].sort(byPosition).map((t) => ({
+      code: t.code,
+      label: t.label,
+      moves: [...(t.template_movements || [])].sort(byPosition).map(rowToBaseMovement),
+    })),
   };
 }
 
-// Fetches the content layer (which programs exist, and the gym movement bank)
-// from Supabase instead of lib/gymProgram.ts's hardcoded GYM constant. Never
-// fatal — a fresh install or an offline first-launch falls back to that same
-// hardcoded constant (see lib/appState.tsx), same graceful-degradation pattern
-// as mobility_logs/walks/weighins.
+// Fetches the content layer — the category cards, and every live plan with its
+// sessions, movements and alternatives — in two requests. Never fatal: on any
+// error the app stays on its cached copy, or lib/gymProgram.ts's GYM_PROGRAM on
+// a fresh offline install (see lib/appState.tsx).
 export async function fetchProgramContent(): Promise<ProgramContent | null> {
-  const [programsRes, templatesRes, movesRes] = await Promise.all([
-    supabase.from("programs").select("*"),
-    supabase.from("session_templates").select("*").eq("category", "gym").order("order_index", { ascending: true }),
-    supabase.from("movements").select("*").eq("category", "gym").order("order_index", { ascending: true }),
+  const [categoriesRes, programsRes] = await Promise.all([
+    supabase.from("categories").select("key, name, sub, live, sort_order").order("sort_order", { ascending: true }),
+    supabase.from("programs").select(PROGRAM_SELECT).eq("live", true).order("sort_order", { ascending: true }),
   ]);
-  if (programsRes.error || templatesRes.error || movesRes.error) {
-    console.warn(
-      "Program content fetch failed (migration 009 run yet?):",
-      programsRes.error || templatesRes.error || movesRes.error
-    );
+  if (categoriesRes.error || programsRes.error) {
+    console.warn("Program content fetch failed (migrations 013/014 run yet?):", categoriesRes.error || programsRes.error);
     return null;
   }
-  const templates = (templatesRes.data as SessionTemplateRow[]) || [];
-  const templateLetter: Record<string, Letter> = {};
-  templates.forEach((t) => (templateLetter[t.id] = t.letter as Letter));
-
-  const bank: Record<Letter, BaseMovement[]> = { A: [], B: [], C: [] };
-  ((movesRes.data as MovementRow[]) || []).forEach((row) => {
-    const letter = templateLetter[row.session_template_id];
-    if (!letter) return;
-    bank[letter].push(rowToBaseMovement(row));
-  });
-
   return {
-    programs: ((programsRes.data as ProgramRow[]) || []).map((p) => ({ category: p.category, name: p.name, sub: p.sub, live: p.live })),
-    bank,
+    categories: ((categoriesRes.data as CategoryRow[]) || []).map((c) => ({ key: c.key, name: c.name, sub: c.sub, live: c.live })),
+    programs: ((programsRes.data as unknown as ProgramRow[]) || []).map(rowsToProgram),
   };
 }
 

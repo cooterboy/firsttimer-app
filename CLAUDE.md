@@ -84,6 +84,11 @@ Cutting these is a small slice of the surface area. Do not quietly add them back
 ## Conventions
 
 - One screen per file. Business logic in `lib/`, not in components.
+- Workout content lives in Supabase, keyed by category (migrations 013/014: `categories` →
+  `programs` → `session_templates` → `template_movements` → `movement_alternatives`, plus a
+  shared `exercises` library). A new category, plan (e.g. a home program) or exercise is an
+  INSERT, never a migration or a code change. `GYM_PROGRAM` in `lib/gymProgram.ts` is only the
+  offline fallback for a fresh install with no cache and no network.
 - The design tokens come from the prototype's `:root` CSS variables — same colors, same type
   scale, same three-state theming (light / system dark / forced dark).
 - Copy is content, not filler. If a string needs changing, that is a product decision.

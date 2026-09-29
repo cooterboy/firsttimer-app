@@ -4,12 +4,9 @@
 // `state`/`wo`, since React state is owned by the screens that call these.
 
 import {
-  BaseMovement,
   BuiltSession,
-  BLOCK_SESSIONS,
-  GYM,
-  Letter,
   MovementVariant,
+  Program,
   buildSession as buildSessionData,
   daysPer,
   restMultiplier,
@@ -84,13 +81,8 @@ export function bestEver(name: string, history: HistoryEntry[]): { w: number; da
 }
 
 // ---- building an active workout ----
-export function buildSessionForProfile(
-  bank: Record<Letter, BaseMovement[]>,
-  block: number,
-  idx: number,
-  profile: Profile
-): BuiltSession {
-  return buildSessionData(bank, block, idx, profile.length, profile.reps, profile.pain);
+export function buildSessionForProfile(program: Program, block: number, idx: number, profile: Profile): BuiltSession {
+  return buildSessionData(program, block, idx, profile.length, profile.reps, profile.pain);
 }
 
 const warmupMovement = (profile: Profile): ActiveMove => ({
@@ -175,6 +167,8 @@ export function prepareWorkoutMoves(
       hold,
       skipped: false,
       perSide: m.perSide,
+      why: m.why,
+      params: m.params,
       orig: m.orig,
     };
   });
@@ -241,6 +235,8 @@ export function applySwap(m: ActiveMove, alt: MovementVariant, label: string, bl
     cue: alt.cue,
     type,
     perSide,
+    why: alt.why, // unset → the info sheet falls back to the original's
+    params: undefined, // the slot's params describe its own exercise, not this one
     spec,
     swapped: label,
     done: [],
@@ -309,12 +305,16 @@ export type WeightHint = { kind: "db" | "stack"; v: number | null; single: boole
 export function startHint(m: ActiveMove, profile: Profile): WeightHint | null {
   if (m.type !== "weight") return null;
   const n = m.n;
+  const p = m.params || {};
   const kg = profile.units === "metric";
   const u = unit(profile.units);
-  if (/\bDB\b|dumbbell|goblet|farmer|suitcase|renegade|one-arm/i.test(n)) {
-    const lb = /shoulder press|floor press|romanian|bent-over|one-arm row/i.test(n) ? 10 : /carry/i.test(n) ? 20 : 15;
+  // params (template_movements.params) win where set; otherwise the prototype's
+  // name-based guess — which is all the gym program uses.
+  const dumbbell = p.equipment ? p.equipment === "dumbbell" : /\bDB\b|dumbbell|goblet|farmer|suitcase|renegade|one-arm/i.test(n);
+  if (dumbbell) {
+    const lb = p.start_lb ?? (/shoulder press|floor press|romanian|bent-over|one-arm row/i.test(n) ? 10 : /carry/i.test(n) ? 20 : 15);
     const v = kg ? Math.round(lb / 2.2046 / 2.5) * 2.5 : lb;
-    const single = /goblet|one-arm|suitcase/i.test(n);
+    const single = p.single ?? /goblet|one-arm|suitcase/i.test(n);
     return {
       kind: "db",
       v,
@@ -389,20 +389,28 @@ export function movedToday(real: ActiveMove[]): number {
 }
 
 export function nextPreview(
-  bank: Record<Letter, BaseMovement[]>,
+  program: Program,
   block: number,
   session: number,
   profile: Profile
 ): { title: string; moves: string } {
-  if (session >= BLOCK_SESSIONS) return { title: "Block done", moves: "The next block picks up where this one ended." };
-  const s = buildSessionForProfile(bank, block, session, profile);
+  if (session >= program.blockSessions) return { title: "Block done", moves: "The next block picks up where this one ended." };
+  const s = buildSessionForProfile(program, block, session, profile);
   const nt = nextTrainingDay();
   return { title: `${nt.name} · Session ${session + 1} · ${s.letter}`, moves: s.moves.map((m) => m.n).join(" · ") };
 }
 
 export type FinishCopy = { big: string; line: string; wins: string[]; card: string; caption: string };
 
-export function finishCopy(wo: ActiveWorkout, real: ActiveMove[], blockDone: boolean, milestone: boolean, history: HistoryEntry[], profile: Profile): FinishCopy {
+export function finishCopy(
+  wo: ActiveWorkout,
+  real: ActiveMove[],
+  blockDone: boolean,
+  milestone: boolean,
+  history: HistoryEntry[],
+  profile: Profile,
+  blockSessions: number
+): FinishCopy {
   const days = daysPer();
   const inWeek = (wo.idx % days) + 1;
   const nt = nextTrainingDay();
@@ -421,7 +429,7 @@ export function finishCopy(wo: ActiveWorkout, real: ActiveMove[], blockDone: boo
   let big: string, line: string, card: string;
   if (blockDone) {
     big = `Block ${wo.block} done.`;
-    line = `${BLOCK_SESSIONS} sessions. Most people never get past three.`;
+    line = `${blockSessions} sessions. Most people never get past three.`;
     card = `BLOCK ${wo.block} DONE`;
   } else if (total === 1) {
     big = "Session 1. Done.";
@@ -582,16 +590,17 @@ export function retestSummary(history: HistoryEntry[], units: Profile["units"]):
 // Dev-only: fabricate plausible history for testing block-end screens (retest table,
 // "block done" copy) without actually playing through 23 real sessions first. Leaves
 // the last session of the block for a real playthrough.
-export function devSeedNearBlockEnd(block: number): HistoryEntry[] {
-  const count = BLOCK_SESSIONS - 1;
+export function devSeedNearBlockEnd(program: Program, block: number): HistoryEntry[] {
+  const count = program.blockSessions - 1;
   const entries: HistoryEntry[] = [];
   const startWeight: Record<string, number> = {};
   for (let idx = 0; idx < count; idx++) {
-    const letter = ["A", "B", "C"][idx % 3] as "A" | "B" | "C";
+    const template = program.templates[idx % program.templates.length];
+    const letter = template.code;
     const daysAgo = (count - idx) * 2;
     const date = new Date(Date.now() - daysAgo * 86400000).toISOString();
     const moves: HistoryEntry["moves"] = {};
-    GYM[letter].forEach((m) => {
+    template.moves.forEach((m) => {
       if (m.type !== "weight") {
         moves[m.n] = { w: "", setW: [], feel: "right", sets: 3, reps: 0, type: m.type, note: "", mtags: [] };
         return;
@@ -729,14 +738,14 @@ export function nutritionCard(profile: Profile): NutritionCard {
 // Always targets the CURRENT pending session (block/session), same as the prototype —
 // there's exactly one session you could plausibly have missed logging: the next one up.
 export function buildBackfillEntry(
-  bank: Record<Letter, BaseMovement[]>,
+  program: Program,
   block: number,
   idx: number,
   profile: Profile,
   date: Date,
   weightsByMove: Record<string, string>
 ): HistoryEntry {
-  const built = buildSessionForProfile(bank, block, idx, profile);
+  const built = buildSessionForProfile(program, block, idx, profile);
   const moves: HistoryEntry["moves"] = {};
   built.moves.forEach((m) => {
     const w = (weightsByMove[m.n] || "").trim();
@@ -1127,6 +1136,7 @@ export function openerCopy(params: {
   streak: number;
   session: number;
   block: number;
+  blockSessions: number;
   lastDate: string | null;
   paused: boolean;
   isPlanDay: boolean;
@@ -1135,14 +1145,15 @@ export function openerCopy(params: {
   name: string;
   recoveryAdjustedAt?: string | null;
 }): OpenerCopy {
-  const { history, streak, session, block, lastDate, paused, isPlanDay, mobility, mobilitySetting, name, recoveryAdjustedAt } = params;
+  const { history, streak, session, block, blockSessions, lastDate, paused, isPlanDay, mobility, mobilitySetting, name, recoveryAdjustedAt } =
+    params;
   const done = history.length;
   const nt = nextTrainingDay();
   const days = daysPer();
   const inWeek = session % days;
   if (!done) return { big: "Everyone starts here.", sub: name ? `Morning, ${name}. Session one is waiting.` : "Session one is waiting." };
   if (isComeback(history, lastDate, paused, recoveryAdjustedAt ?? null)) return { big: "Been a minute.", sub: "Pick it up exactly where you left it." };
-  if (session >= BLOCK_SESSIONS) return { big: `Block ${block} done.`, sub: `${BLOCK_SESSIONS} sessions. Most people never get past three.` };
+  if (session >= blockSessions) return { big: `Block ${block} done.`, sub: `${blockSessions} sessions. Most people never get past three.` };
   if (trainedToday(history)) return { big: "Done for today.", sub: `See you ${nt.name}.` };
   const nextStreakTier = [3, 5, 10, 20, 50].find((v) => streak === v - 1);
   if (nextStreakTier) return { big: `One more and it's ${nextStreakTier}.`, sub: `${streak} in a row right now.` };
@@ -1234,7 +1245,7 @@ export function weekRecap(
 // calendar week. Mobility/walks aren't tied to a block — they're logged independently
 // of block/session position (see commitMobility's comment in lib/appState.tsx) — so
 // those stay at 0 here rather than guessing an attribution.
-export function blockRecap(history: HistoryEntry[], block: number): WeekRecap {
+export function blockRecap(history: HistoryEntry[], block: number, blockSessions: number): WeekRecap {
   const sess = history.filter((h) => h.block === block);
   let moved = 0;
   const ups: string[] = [];
@@ -1261,7 +1272,7 @@ export function blockRecap(history: HistoryEntry[], block: number): WeekRecap {
   return {
     start: sess.length ? new Date(sess[0].date).getTime() : Date.now(),
     sessions: sess.length,
-    target: BLOCK_SESSIONS,
+    target: blockSessions,
     mobility: 0,
     walks: 0,
     walkMin: 0,
