@@ -387,7 +387,7 @@ export type BuiltSession = {
   moves: SessionMovement[];
 };
 
-const PAIN_LABEL: Record<string, string> = { back: "lower back" };
+const PAIN_LABEL: Record<string, string> = { back: "lower back", other: "joints" };
 
 // prototype's buildSession(), including the pain-substitution step. `program` is
 // the plan to build from — normally fetched from Supabase (AppState.program),

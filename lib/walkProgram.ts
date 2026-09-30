@@ -10,7 +10,7 @@ export const WALK_KINDS: { k: WalkKind; l: string; n: string }[] = [
 
 export const WALK_MINS = [10, 20, 30, 45];
 
-export const WALK_HURT = ["Knees", "Shins", "Feet", "Hips", "Lower back", "Ankles"];
+export const WALK_HURT = ["Knees", "Shins", "Feet", "Hips", "Lower back", "Ankles", "Wrists", "Other joints"];
 
 export function walkKindLabel(k: WalkKind): string {
   return WALK_KINDS.find((x) => x.k === k)?.n || "Walk";

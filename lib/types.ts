@@ -25,10 +25,15 @@ export const WHERE_LABEL: Record<Where, string> = {
   hotel: "Hotel or travel",
   outside: "Outside",
 };
-export const PAIN_AREAS = ["knees", "back", "shoulders", "wrists", "neck"] as const;
+// Keys match movement_alternatives.pain_area, so a movement can carry its own swap
+// for any of them. Only knees, back and shoulders have swaps written so far; the
+// rest are saved on the profile and swap nothing until content adds them.
+export const PAIN_AREAS = ["knees", "back", "shoulders", "wrists", "neck", "hips", "ankles", "other"] as const;
 export type PainArea = (typeof PAIN_AREAS)[number];
 export function painAreaLabel(k: PainArea): string {
-  return k === "back" ? "Lower back" : k[0].toUpperCase() + k.slice(1);
+  if (k === "back") return "Lower back";
+  if (k === "other") return "Other joints";
+  return k[0].toUpperCase() + k.slice(1);
 }
 
 // prototype's onboarding step 2 "Days a week" — collected and stored, but not yet
