@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Text, TouchableOpacity, View, StyleSheet } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "../lib/haptics";
 import { playBeep } from "../lib/sound";
 import { useTheme } from "../lib/ThemeContext";
@@ -208,6 +208,11 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={saveAndExit}>
+      {/* A Modal is its own native view tree, so the app root's SafeAreaProvider isn't
+          above this SafeAreaView; without a provider it reads its insets once, before
+          the modal is laid out, and keeps 0 — header under the status bar. A provider
+          inside the modal re-reads them once layout happens. */}
+      <SafeAreaProvider>
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
         <View style={styles.topBar}>
           <Text style={[styles.topLabel, { color: colors.muted, fontFamily: fonts.bodyBold }]} numberOfLines={1}>
@@ -294,6 +299,7 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
           </TouchableOpacity>
         </Sheet>
       </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }
