@@ -928,6 +928,14 @@ export function newWeighIn(w: number): WeighIn {
 }
 // prototype's finishMob(): what gets said depends on whether they also lifted today,
 // whether it's their first ever, and round-number milestones every four blocks.
+// A mobility day counts once at least this many stretches were held all the way
+// through — or skipped with "This hurts", which is honest use of a safety option,
+// not skipping. Next or a swipe past a stretch doesn't count it.
+export const MOBILITY_MIN_HELD = 1;
+export function mobilityDayCounts(held: number): boolean {
+  return held >= MOBILITY_MIN_HELD;
+}
+
 export function mobilityFinishCopy(
   mobility: MobilityEntry[],
   minutes: number,

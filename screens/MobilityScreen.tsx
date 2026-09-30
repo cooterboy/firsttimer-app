@@ -8,13 +8,13 @@ import { useTheme } from "../lib/ThemeContext";
 import { fonts, radius, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
 import { mobilityMinutes, mobilitySteps } from "../lib/mobilityProgram";
-import { mobilityFinishCopy, newMobilityEntry, trainedToday } from "../lib/sessionEngine";
+import { mobilityDayCounts, mobilityFinishCopy, newMobilityEntry, trainedToday } from "../lib/sessionEngine";
 import CelebrateRing from "../components/workout/CelebrateRing";
 import FadeSwitch from "../components/workout/FadeSwitch";
 import SwipeNav from "../components/workout/SwipeNav";
 import Sheet from "../components/workout/Sheet";
 
-type Result = { big: string; line: string; minutes: number; stretches: number; count: number };
+type Result = { logged: boolean; big: string; line: string; minutes: number; stretches: number; count: number };
 
 export default function MobilityScreen({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { colors } = useTheme();
@@ -27,6 +27,22 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
   const [started, setStarted] = useState(false);
   const [phase, setPhase] = useState<"steps" | "finish">("steps");
   const [hurtSheet, setHurtSheet] = useState(false);
+  // Stretches whose hold ran all the way out — the only thing that counts as done.
+  // Next, swiping and "This hurts" move on without adding to it.
+  const [held, setHeld] = useState<Set<number>>(() => new Set());
+  // The same set, for decisions. finish() can run from a hold timer's old callback,
+  // which would see a stale `held`; this ref is always current.
+  const heldRef = useRef<Set<number>>(new Set());
+  const markHeld = (idx: number) => {
+    heldRef.current.add(idx);
+    setHeld(new Set(heldRef.current));
+  };
+  // The stretch on screen right now. A hold timer's callbacks are created when that
+  // timer starts and keep that moment's `i`, so completion reads the position here.
+  const iRef = useRef(0);
+  useEffect(() => {
+    iRef.current = i;
+  }, [i]);
   const [result, setResult] = useState<Result | null>(null);
   const startedAtRef = useRef(Date.now());
   const endRef = useRef(0);
@@ -61,6 +77,8 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
     setPhase("steps");
     setHurtSheet(false);
     setResult(null);
+    heldRef.current = new Set();
+    setHeld(new Set());
     startedAtRef.current = Date.now();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
@@ -77,12 +95,18 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
   const step = steps[i];
 
   const finish = () => {
+    if (!mobilityDayCounts(heldRef.current.size)) {
+      // Nothing held: nothing saved, and no celebration.
+      setResult({ logged: false, big: "", line: "", minutes: 0, stretches: 0, count: appState.mobility.length });
+      setPhase("finish");
+      return;
+    }
     const minutes = Math.max(1, Math.round((Date.now() - startedAtRef.current) / 60000));
     const alsoLifted = trainedToday(appState.history);
     const entry = newMobilityEntry(minutes);
     const copy = mobilityFinishCopy([...appState.mobility, entry], minutes, alsoLifted);
     appState.commitMobility(entry);
-    setResult({ ...copy, minutes, stretches: steps.length, count: appState.mobility.length + 1 });
+    setResult({ ...copy, logged: true, minutes, stretches: steps.length, count: appState.mobility.length + 1 });
     setPhase("finish");
   };
 
@@ -93,12 +117,14 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
   // much was actually done. Given how short and low-stakes a mobility day is, partial
   // credit (log whatever was completed, no resume) is the simpler fix that matches:
   // logging a completed 2-minute mobility day is honest, and doesn't need a second
-  // persisted "active" state living alongside appState.active.
-  const hasProgress = i > 0 || started;
+  // persisted "active" state living alongside appState.active. It saves only once
+  // the day counts (mobilityDayCounts: a stretch held, or skipped via "This hurts"),
+  // and the button only says "Save & exit" when it will.
+  const hasProgress = mobilityDayCounts(held.size);
   const saveAndExit = () => {
     clearTick();
     clearAdvanceTimeout();
-    if (hasProgress) {
+    if (mobilityDayCounts(heldRef.current.size)) {
       const minutes = Math.max(1, Math.round((Date.now() - startedAtRef.current) / 60000));
       appState.commitMobility(newMobilityEntry(minutes));
     }
@@ -124,6 +150,7 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
   };
 
   const completeStep = () => {
+    markHeld(iRef.current);
     playBeep();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     const next = i + 1;
@@ -174,7 +201,10 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
     setStarted(false);
   };
 
+  // "This hurts" → skip counts as held: stopping for pain is using the safety option
+  // honestly, and treating it as incomplete would nudge people to push through pain.
   const skipHurt = () => {
+    markHeld(iRef.current);
     setHurtSheet(false);
     goNext();
   };
@@ -184,20 +214,32 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
       <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
         <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
           <ScrollView contentContainerStyle={styles.finishBody}>
-            <CelebrateRing />
-            <Text style={[styles.big, { color: colors.ink, fontFamily: fonts.display }]}>{result.big}</Text>
-            <Text style={[styles.line, { color: colors.ink2 }]}>{result.line}</Text>
-            <View style={styles.statsRow}>
-              <Stat n={result.stretches} label={`Stretch${result.stretches === 1 ? "" : "es"}`} />
-              <Stat n={result.minutes} label={`Minute${result.minutes === 1 ? "" : "s"}`} />
-              <Stat n={result.count} label={`Mobility day${result.count === 1 ? "" : "s"}`} />
-            </View>
-            <Text style={[styles.note, { color: colors.muted, textAlign: "center" }]}>
-              Logged to your history, same as a session.
-            </Text>
-            <TouchableOpacity activeOpacity={0.7} style={[styles.primary, { backgroundColor: colors.ink }]} onPress={onClose}>
-              <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 15 }}>Done</Text>
-            </TouchableOpacity>
+            {!result.logged ? (
+              <>
+                <Text style={[styles.big, { color: colors.ink, fontFamily: fonts.display }]}>Nothing logged.</Text>
+                <Text style={[styles.line, { color: colors.ink2 }]}>Hold at least one stretch to count today as done.</Text>
+                <TouchableOpacity activeOpacity={0.7} style={[styles.primary, { backgroundColor: colors.ink }]} onPress={onClose}>
+                  <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 15 }}>Done</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <CelebrateRing />
+                <Text style={[styles.big, { color: colors.ink, fontFamily: fonts.display }]}>{result.big}</Text>
+                <Text style={[styles.line, { color: colors.ink2 }]}>{result.line}</Text>
+                <View style={styles.statsRow}>
+                  <Stat n={result.stretches} label={`Stretch${result.stretches === 1 ? "" : "es"}`} />
+                  <Stat n={result.minutes} label={`Minute${result.minutes === 1 ? "" : "s"}`} />
+                  <Stat n={result.count} label={`Mobility day${result.count === 1 ? "" : "s"}`} />
+                </View>
+                <Text style={[styles.note, { color: colors.muted, textAlign: "center" }]}>
+                  Logged to your history, same as a session.
+                </Text>
+                <TouchableOpacity activeOpacity={0.7} style={[styles.primary, { backgroundColor: colors.ink }]} onPress={onClose}>
+                  <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 15 }}>Done</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -228,7 +270,19 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
           {steps.map((_, idx) => (
             <View
               key={idx}
-              style={[styles.dot, { backgroundColor: idx < i ? colors.good : idx === i ? colors.accent : colors.line }]}
+              // Current position, then held (green), then passed-but-not-held (hollow
+              // outline, so skipped reads differently by shape, not only colour), then
+              // still to come.
+              style={[
+                styles.dot,
+                idx === i
+                  ? { backgroundColor: colors.accent }
+                  : held.has(idx)
+                    ? { backgroundColor: colors.good }
+                    : idx < i
+                      ? { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.muted }
+                      : { backgroundColor: colors.line },
+              ]}
             />
           ))}
         </View>
