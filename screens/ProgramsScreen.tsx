@@ -63,8 +63,8 @@ export default function ProgramsScreen() {
 
   const u = unit(profile.units);
   const totalBlocks = Math.min(MAX_BLOCKS, Math.max(4, block + 2));
-  // Bundles cover fixed blocks (2–4, 5–7, 8–10), so there is only a "next three"
-  // to offer when one starts at exactly the next unowned block.
+  // The bundle covers fixed blocks (2–4), so there is only a "next three"
+  // to offer while block 2 is the next unowned block.
   const bundle = nextOffers(owned).bundle;
 
   return (

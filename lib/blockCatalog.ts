@@ -3,18 +3,18 @@
 // what someone owns. Pure (no store SDK), so lib/purchases.ts, the Plans and
 // Purchases screens, and restore all read the same answers.
 //
-// The gym program runs 12 blocks. Block 1 is free. Blocks 2–12 are each a
-// non-consumable product, and three fixed bundles cover 2–4, 5–7 and 8–10.
-// Non-consumable means each product can be bought once per store account, so a
-// bundle has to name its blocks: restore only reports "this account owns
-// gym_bundle_05_07", and that has to mean the same three blocks forever.
+// The gym program runs 6 blocks. Block 1 is free. Blocks 2–6 are each a
+// non-consumable product, and one fixed bundle covers 2–4; blocks 5 and 6 are
+// sold one at a time. Non-consumable means each product can be bought once per
+// store account, so a bundle has to name its blocks: restore only reports "this
+// account owns gym_bundle_02_04", and that has to mean the same three blocks forever.
 //
 // Product IDs are permanent in App Store Connect and Google Play (they can't be
 // renamed or reused after deletion), which is why they carry a `gym_` prefix:
 // Hyrox and Marathon blocks will need their own products once those programs have
 // real content, and this keeps the namespaces apart. Only gym products exist.
 
-export const MAX_BLOCKS = 12;
+export const MAX_BLOCKS = 6;
 export const PRICE_ONE = 9; // shown only until the store's own localized price loads
 export const PRICE_THREE = 19;
 
@@ -31,7 +31,7 @@ export const SINGLE_PRODUCTS: BlockProduct[] = Array.from({ length: MAX_BLOCKS -
   return { id: `gym_block_${pad(b)}`, blocks: [b], price: PRICE_ONE };
 });
 
-export const BUNDLE_PRODUCTS: BlockProduct[] = [2, 5, 8].map((first) => ({
+export const BUNDLE_PRODUCTS: BlockProduct[] = [2].map((first) => ({
   id: `gym_bundle_${pad(first)}_${pad(first + 2)}`,
   blocks: [first, first + 1, first + 2],
   price: PRICE_THREE,
@@ -79,7 +79,7 @@ export function nextOffers(owned: number): { single: BlockProduct | null; bundle
   };
 }
 
-// "Block 5" / "Blocks 5–7" — the receipt label for a product.
+// "Block 5" / "Blocks 2–4" — the receipt label for a product.
 export function productLabel(p: BlockProduct): string {
   const first = p.blocks[0];
   const last = p.blocks[p.blocks.length - 1];

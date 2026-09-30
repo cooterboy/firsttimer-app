@@ -14,7 +14,7 @@ import Card from "../components/Card";
 
 // Ports the prototype's SUB.paywall + paywallProof() (spec/prototype.html:3141-3184).
 // Sells what lib/blockCatalog.ts says comes next: the next block on its own, and —
-// when a fixed bundle starts at that block (2–4, 5–7, 8–10) — that bundle. Both are
+// when the fixed bundle starts at that block (2–4) — that bundle. Both are
 // non-consumable store products bought through RevenueCat (lib/purchases.ts) and
 // committed as the same Purchase record the __DEV__-only unlock below writes. That
 // dev button stays: it's still the fastest way to test block-gating UI without an

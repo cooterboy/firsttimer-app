@@ -102,7 +102,7 @@ export type Friend = {
 // productId; for those `blocks` (how many blocks it granted, in order) is used.
 export type Purchase = {
   id: string; // a UUID; one per (account, product) — see lib/purchases.ts's purchaseId()
-  label: string; // "Block 5" / "Blocks 5–7"
+  label: string; // "Block 5" / "Blocks 2–4"
   price: number;
   blocks: number;
   productId?: string | null;
