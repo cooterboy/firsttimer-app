@@ -17,6 +17,7 @@ import {
 import { lastFor } from "../lib/sessionEngine";
 import { MAX_BLOCKS, PRICE_ONE, PRICE_THREE, nextOffers, ownedBlocks } from "../lib/blockCatalog";
 import { WHERE_LABEL } from "../lib/types";
+import { TRAINER } from "../lib/trainerContent";
 import AppHeader from "../components/AppHeader";
 import Card from "../components/Card";
 import Sheet from "../components/workout/Sheet";
@@ -180,6 +181,14 @@ export default function ProgramsScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Your first day</Text>
             <Text style={[styles.moveCue, { color: colors.muted }]}>What to wear, what to bring, and walking in for the first time.</Text>
+          </View>
+          <Text style={{ color: colors.muted, fontSize: 18 }}>›</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity activeOpacity={0.7} style={[styles.navCard, { backgroundColor: colors.raised }]} onPress={() => navigation.navigate("Trainer")}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.moveName, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>Your trainer</Text>
+            <Text style={[styles.moveCue, { color: colors.muted }]}>{TRAINER.name}, the certified trainer who wrote this program.</Text>
           </View>
           <Text style={{ color: colors.muted, fontSize: 18 }}>›</Text>
         </TouchableOpacity>

@@ -15,6 +15,7 @@ import HelpScreen from "../screens/HelpScreen";
 import AboutScreen from "../screens/AboutScreen";
 import ProgramsScreen from "../screens/ProgramsScreen";
 import FirstDayScreen from "../screens/FirstDayScreen";
+import TrainerScreen from "../screens/TrainerScreen";
 import ShopScreen from "../screens/ShopScreen";
 import FindGymScreen from "../screens/FindGymScreen";
 import RecoveryScreen from "../screens/RecoveryScreen";
@@ -52,6 +53,7 @@ function ProgramsStackScreen() {
     <ProgramsStack.Navigator screenOptions={{ headerShown: false }}>
       <ProgramsStack.Screen name="ProgramsRoot" component={ProgramsScreen} />
       <ProgramsStack.Screen name="FirstDay" component={FirstDayScreen} options={{ presentation: "card" }} />
+      <ProgramsStack.Screen name="Trainer" component={TrainerScreen} options={{ presentation: "card" }} />
       <ProgramsStack.Screen name="Plans" component={PlansScreen} options={{ presentation: "card" }} />
     </ProgramsStack.Navigator>
   );
