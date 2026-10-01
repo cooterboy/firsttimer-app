@@ -5,6 +5,23 @@
 -- record, written local-first and pushed when online, last-write-wins on collision.
 -- No merge logic, no server-side conflict resolution.
 
+-- The gym a member got their box from (migration 019). Created before profiles,
+-- which references it. Real gyms are Table Editor rows with active = true.
+create table if not exists gyms (
+  code text primary key,
+  name text not null,
+  active boolean not null default false,
+  sort_order int not null default 0,
+  constraint gyms_code_format check (code ~ '^[A-Z0-9]{2,8}$')
+);
+
+alter table gyms enable row level security;
+
+create policy "gyms_select"
+on gyms
+for select
+using (auth.role() = 'authenticated');
+
 create table if not exists profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   name text not null default '',
@@ -25,6 +42,10 @@ create table if not exists profiles (
   box_code text,
   city text,
   recovery_adjusted_at timestamptz,
+  -- migration 019: gym_set_at null = never answered; set with gym_code null =
+  -- "Somewhere else / I didn't get a box".
+  gym_code text references gyms (code) on update cascade on delete restrict,
+  gym_set_at timestamptz,
   settings jsonb not null default '{}'::jsonb,
   block int not null default 1,
   session int not null default 0,
@@ -471,6 +492,12 @@ insert into movement_alternatives (template_movement_id, reason, pain_area, exer
   ('63b05814-ae67-4921-abbd-d926eca5ac1a', 'easier', null, (select id from exercises where category = 'gym' and name = 'Farmer carry, light'), 'time', null, null),
   ('63b05814-ae67-4921-abbd-d926eca5ac1a', 'pain', 'back', (select id from exercises where category = 'gym' and name = 'Suitcase carry'), 'time', null, null)
 on conflict (template_movement_id, reason, coalesce(pain_area, '')) do nothing;
+
+-- One inactive test gym, for exercising the flow on a dev build — see migration 019.
+-- No real gyms until they commit.
+insert into gyms (code, name, active, sort_order) values
+  ('TEST', 'TEST — Dev Gym', false, 999)
+on conflict (code) do nothing;
 
 -- Public-read Storage buckets for exercise media — see migration 018.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types) values
