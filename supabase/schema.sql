@@ -244,7 +244,8 @@ create table if not exists exercises (
   name text not null,
   cue text not null,
   why text,
-  video_url text,
+  video_url text, -- full URL (migration 018)
+  image_url text, -- full URL (migration 018)
   unique (category, name)
 );
 
@@ -264,7 +265,15 @@ create table if not exists template_movements (
   rest_sec int,
   per_side boolean not null default false,
   cue_override text,
-  params jsonb not null default '{}'::jsonb
+  params jsonb not null default '{}'::jsonb,
+  -- Blocks this slot runs in; null = unbounded on that side (migration 018).
+  block_from int,
+  block_to int,
+  constraint template_movements_block_range_check check (
+    (block_from is null or block_from >= 1)
+    and (block_to is null or block_to >= 1)
+    and (block_from is null or block_to is null or block_to >= block_from)
+  )
 );
 
 create index if not exists template_movements_template_idx on template_movements (template_id, position);
@@ -462,6 +471,15 @@ insert into movement_alternatives (template_movement_id, reason, pain_area, exer
   ('63b05814-ae67-4921-abbd-d926eca5ac1a', 'easier', null, (select id from exercises where category = 'gym' and name = 'Farmer carry, light'), 'time', null, null),
   ('63b05814-ae67-4921-abbd-d926eca5ac1a', 'pain', 'back', (select id from exercises where category = 'gym' and name = 'Suitcase carry'), 'time', null, null)
 on conflict (template_movement_id, reason, coalesce(pain_area, '')) do nothing;
+
+-- Public-read Storage buckets for exercise media — see migration 018.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types) values
+  ('exercise-images', 'exercise-images', true, 1048576, array['image/jpeg', 'image/png', 'image/webp']),
+  ('exercise-videos', 'exercise-videos', true, 15728640, array['video/mp4'])
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 -- Placeholder shop seed — see migration 012 for provenance.
 insert into shop_items (id, category, section, name, blurb, link, sort_order) values

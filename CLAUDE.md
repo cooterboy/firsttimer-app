@@ -36,7 +36,7 @@ Do not treat the prototype as legacy code to be improved. Treat it as the answer
 | Backend | Supabase | Auth + Postgres + storage in one, free at pilot scale |
 | Purchases | RevenueCat | Hand-rolling StoreKit and Play Billing is the worst part of the build |
 | Push | Expo Notifications | Built in |
-| Video | Bunny.net or Cloudflare Stream | 25 clips of ~20 seconds |
+| Video | Supabase Storage (pilot) | ~25 clips of ~20 seconds in the public `exercise-videos` bucket. `video_url` holds a full URL, so moving to Bunny.net / Cloudflare Stream later (adaptive streaming, cheaper egress at scale) is a data change |
 | Errors | Sentry | Free tier |
 
 ## The sync rule — do not build the complicated version
