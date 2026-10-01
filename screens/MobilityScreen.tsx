@@ -154,17 +154,22 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
     markHeld(iRef.current);
     playBeep();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    const next = i + 1;
+    // From the current position, not `i`: this runs from a hold timer's callback,
+    // which keeps the `i` from when that timer started.
+    const next = iRef.current + 1;
     advanceTimeoutRef.current = setTimeout(() => {
       advanceTimeoutRef.current = null;
       if (next >= steps.length) {
         finish();
         return;
       }
+      // Moves on to the next stretch but doesn't start its hold: every stretch waits
+      // for its own Start press, so there's time to see the movement first. (Starting
+      // it from here is also what made a stretch restart instead of advancing — the
+      // new timer would inherit this old callback's stale position.)
       setI(next);
       setLeft(steps[next].sec);
-      setStarted(true);
-      startTimer(steps[next].sec);
+      setStarted(false);
     }, 600);
   };
 
@@ -336,7 +341,7 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
             </TouchableOpacity>
           </View>
           <Text style={[styles.note, { color: colors.muted, textAlign: "center" }]}>
-            About {mobilityMinutes()} minutes total. The timer moves on by itself.
+            About {mobilityMinutes()} minutes total. Press Start on each stretch when you're ready.
           </Text>
         </ScrollView>
 
