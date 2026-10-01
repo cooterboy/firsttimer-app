@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Modal, ScrollView, Share, Text, TouchableOpacity, View, StyleSheet } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "../lib/haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, radius, spacing } from "../lib/theme";
@@ -141,6 +141,8 @@ export default function WalkScreen({ visible, onClose }: { visible: boolean; onC
     const kindLower = walkKindLabel(kind).toLowerCase();
     return (
       <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+        {/* Own provider: a Modal is a separate native view tree, so the app root's SafeAreaProvider isn't above this SafeAreaView — without one it can read 0 insets and sit under the status bar (see MobilityScreen). */}
+        <SafeAreaProvider>
         <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
           <ScrollView contentContainerStyle={styles.finishBody}>
             <CelebrateRing />
@@ -215,6 +217,7 @@ export default function WalkScreen({ visible, onClose }: { visible: boolean; onC
             </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
+        </SafeAreaProvider>
       </Modal>
     );
   }
@@ -226,6 +229,8 @@ export default function WalkScreen({ visible, onClose }: { visible: boolean; onC
     const cue = walkCue(pct, kind);
     return (
       <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+        {/* Own provider: a Modal is a separate native view tree, so the app root's SafeAreaProvider isn't above this SafeAreaView — without one it can read 0 insets and sit under the status bar (see MobilityScreen). */}
+        <SafeAreaProvider>
         <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
           <View style={styles.topBar}>
             <Text style={[styles.topLabel, { color: colors.muted, fontFamily: fonts.bodyBold }]} numberOfLines={1}>
@@ -268,6 +273,7 @@ export default function WalkScreen({ visible, onClose }: { visible: boolean; onC
             </FadeSwitch>
           </ScrollView>
         </SafeAreaView>
+        </SafeAreaProvider>
       </Modal>
     );
   }
@@ -276,6 +282,8 @@ export default function WalkScreen({ visible, onClose }: { visible: boolean; onC
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+      {/* Own provider: a Modal is a separate native view tree, so the app root's SafeAreaProvider isn't above this SafeAreaView — without one it can read 0 insets and sit under the status bar (see MobilityScreen). */}
+      <SafeAreaProvider>
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
         <View style={styles.topBar}>
           <Text style={[styles.topLabel, { color: colors.muted, fontFamily: fonts.bodyBold }]}>Move today</Text>
@@ -346,6 +354,7 @@ export default function WalkScreen({ visible, onClose }: { visible: boolean; onC
           </Text>
         </ScrollView>
       </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

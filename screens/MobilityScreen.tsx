@@ -218,6 +218,7 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
   if (phase === "finish" && result) {
     return (
       <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+        <SafeAreaProvider>
         <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
           <ScrollView contentContainerStyle={styles.finishBody}>
             {!result.logged ? (
@@ -249,6 +250,7 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
             )}
           </ScrollView>
         </SafeAreaView>
+        </SafeAreaProvider>
       </Modal>
     );
   }

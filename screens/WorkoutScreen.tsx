@@ -9,7 +9,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "../lib/haptics";
 import { playBeep } from "../lib/sound";
 import { useTheme } from "../lib/ThemeContext";
@@ -281,6 +281,8 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => closeAndReset(false)}>
+      {/* Own provider: a Modal is a separate native view tree, so the app root's SafeAreaProvider isn't above this SafeAreaView — without one it can read 0 insets and sit under the status bar (see MobilityScreen). */}
+      <SafeAreaProvider>
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.paper }]}>
         {showTopBar ? (
           <View style={styles.topBar}>
@@ -435,6 +437,7 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
           />
         </Sheet>
       </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }
