@@ -106,7 +106,8 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
     const entry = newMobilityEntry(minutes);
     const copy = mobilityFinishCopy([...appState.mobility, entry], minutes, alsoLifted);
     appState.commitMobility(entry);
-    setResult({ ...copy, logged: true, minutes, stretches: steps.length, count: appState.mobility.length + 1 });
+    // Stretches actually held (including "This hurts" skips), not the total on the list.
+    setResult({ ...copy, logged: true, minutes, stretches: heldRef.current.size, count: appState.mobility.length + 1 });
     setPhase("finish");
   };
 
@@ -228,7 +229,8 @@ export default function MobilityScreen({ visible, onClose }: { visible: boolean;
                 <Text style={[styles.big, { color: colors.ink, fontFamily: fonts.display }]}>{result.big}</Text>
                 <Text style={[styles.line, { color: colors.ink2 }]}>{result.line}</Text>
                 <View style={styles.statsRow}>
-                  <Stat n={result.stretches} label={`Stretch${result.stretches === 1 ? "" : "es"}`} />
+                  {/* Held out of the whole list, so a partial day reads as one: "2 / of 17 stretches". */}
+                  <Stat n={result.stretches} label={`of ${steps.length} stretches`} />
                   <Stat n={result.minutes} label={`Minute${result.minutes === 1 ? "" : "s"}`} />
                   <Stat n={result.count} label={`Mobility day${result.count === 1 ? "" : "s"}`} />
                 </View>
