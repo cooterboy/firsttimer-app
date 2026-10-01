@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Alert, Keyboard, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -12,6 +12,8 @@ import { saveAndShare } from "../lib/exportFile";
 import { clearCachedState } from "../lib/localCache";
 import { Goal, GOAL_LABEL } from "../lib/types";
 import { supabase } from "../lib/supabase";
+import { fetchGyms } from "../lib/sync";
+import { GYM_OTHER, GYM_OTHER_LABEL, Gym, gymChoiceFor, gymFieldsFor, listedGyms } from "../lib/gyms";
 import Sheet from "../components/workout/Sheet";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -45,6 +47,22 @@ export default function AccountScreen() {
     appState.profile.heightCm ? String(Math.round((appState.profile.heightCm / 2.54) % 12)) : ""
   );
   const [goal, setGoal] = useState<Goal | null>(appState.profile.goal);
+  // Which gym gave them their box (migration 019) — set in onboarding; here it can
+  // be changed, or set for the first time by accounts that onboarded before the
+  // question existed. Once answered it can be changed but not un-answered.
+  const [gymChoice, setGymChoice] = useState<string | null>(gymChoiceFor(appState.profile));
+  const [allGyms, setAllGyms] = useState<Gym[] | null>(null);
+  const [gymsFailed, setGymsFailed] = useState(false);
+  const loadGyms = () => {
+    setGymsFailed(false);
+    fetchGyms().then((g) => (g ? setAllGyms(g) : setGymsFailed(true)));
+  };
+  useEffect(loadGyms, []);
+  // Listed gyms, plus whichever one is already saved even if it's no longer listed
+  // (an inactive gym, say), so the current answer always shows as selected.
+  const gymOptions = allGyms
+    ? [...listedGyms(allGyms, __DEV__), ...allGyms.filter((g) => g.code === gymChoice && !listedGyms(allGyms, __DEV__).includes(g))]
+    : null;
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -63,6 +81,7 @@ export default function AccountScreen() {
       setHeightFt(p.heightCm ? String(Math.floor(p.heightCm / 2.54 / 12)) : "");
       setHeightIn(p.heightCm ? String(Math.round((p.heightCm / 2.54) % 12)) : "");
       setGoal(p.goal);
+      setGymChoice(gymChoiceFor(p));
     }, [appState.profile])
   );
 
@@ -79,6 +98,8 @@ export default function AccountScreen() {
       weight: Number(weight) || null,
       heightCm: nextHeightCm,
       goal,
+      // Only when it actually changed, so saving other fields doesn't move gym_set_at.
+      ...(gymChoice && gymChoice !== gymChoiceFor(appState.profile) ? gymFieldsFor(gymChoice) : {}),
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     Alert.alert("Saved");
@@ -279,6 +300,41 @@ export default function AccountScreen() {
             );
           })}
         </View>
+
+        <Text style={[styles.eyebrow, { color: colors.muted }]}>Which gym gave you your First Timer box?</Text>
+        {gymOptions ? (
+          <View style={styles.pillWrap}>
+            {[...gymOptions.map((g) => ({ code: g.code, label: g.name })), { code: GYM_OTHER, label: GYM_OTHER_LABEL }].map(({ code, label }) => {
+              const on = gymChoice === code;
+              return (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  key={code}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setGymChoice(code);
+                  }}
+                  style={[styles.pill, { borderColor: on ? colors.ink : colors.line, backgroundColor: on ? colors.ink : colors.raised }]}
+                >
+                  <Text style={{ color: on ? colors.paper : colors.ink, fontSize: 13, fontFamily: fonts.bodySemiBold }}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : gymsFailed ? (
+          <View style={styles.pillWrap}>
+            <Text style={[styles.note, { color: colors.muted, width: "100%" }]}>Couldn't load the list of gyms.</Text>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={loadGyms}
+              style={[styles.pill, { borderColor: colors.line, backgroundColor: colors.raised }]}
+            >
+              <Text style={{ color: colors.ink, fontSize: 13, fontFamily: fonts.bodySemiBold }}>Try again</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <Text style={[styles.note, { color: colors.muted }]}>Loading gyms…</Text>
+        )}
 
         <TouchableOpacity activeOpacity={0.7} style={[styles.primary, { backgroundColor: colors.ink, marginTop: spacing.lg }]} onPress={save}>
           <Text style={{ color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 15 }}>Save</Text>
