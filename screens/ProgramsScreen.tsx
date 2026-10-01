@@ -21,6 +21,7 @@ import { TRAINER } from "../lib/trainerContent";
 import AppHeader from "../components/AppHeader";
 import Card from "../components/Card";
 import Sheet from "../components/workout/Sheet";
+import { MovementProgress } from "../components/MovementDetailSheet";
 
 // Ports the prototype's renderPrograms() (spec/prototype.html:2849-2904). One
 // deliberate simplification: the prototype's program-switcher chips only ever
@@ -38,6 +39,13 @@ export default function ProgramsScreen() {
   const navigation = useNavigation<any>();
   const { block, session, history, profile, purchases, notify, program } = appState;
   const [openMove, setOpenMove] = useState<string | null>(null);
+  // "Your progress ›" shows MovementProgress inside this same sheet — including for
+  // a movement with no history of its own, which Progress → Lifts can't list.
+  const [showProgress, setShowProgress] = useState(false);
+  const closeMove = () => {
+    setOpenMove(null);
+    setShowProgress(false);
+  };
 
   const wpb = weeksPerBlock(program.blockSessions);
   const days = daysPer();
@@ -315,8 +323,10 @@ export default function ProgramsScreen() {
           })}
       </ScrollView>
 
-      <Sheet visible={!!openMove} onClose={() => setOpenMove(null)}>
-        {openM ? (
+      <Sheet visible={!!openMove} onClose={closeMove}>
+        {showProgress && openMove ? (
+          <MovementProgress name={openMove} history={history} units={profile.units} onOpenMovement={setOpenMove} />
+        ) : openM ? (
           <>
             <Text style={[styles.sheetTitle, { color: colors.ink, fontFamily: fonts.display }]}>{openMove}</Text>
             <Text style={[styles.sheetBody, { color: colors.ink2 }]}>
@@ -347,6 +357,14 @@ export default function ProgramsScreen() {
                 Your best: {openLast.w} {u}
               </Text>
             ) : null}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setShowProgress(true)}
+              accessibilityRole="button"
+              style={styles.progressLink}
+            >
+              <Text style={{ color: colors.accentDeep, fontFamily: fonts.bodySemiBold, fontSize: 14 }}>Your progress ›</Text>
+            </TouchableOpacity>
           </>
         ) : null}
       </Sheet>
@@ -433,5 +451,6 @@ const styles = StyleSheet.create({
   accordionMove: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8, paddingLeft: 4 },
   sheetTitle: { fontSize: 22, letterSpacing: 0.5, marginBottom: 8 },
   sheetBody: { fontSize: 14, lineHeight: 20, marginBottom: 12 },
+  progressLink: { paddingVertical: 12, marginTop: 4 },
   sheetLine: { fontSize: 13, lineHeight: 20, marginBottom: 4 },
 });

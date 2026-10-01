@@ -428,6 +428,8 @@ export default function WorkoutScreen({ visible, onClose }: { visible: boolean; 
             sheet={sheet}
             move={move}
             profile={profile}
+            history={appState.history}
+            onShowProgress={(name) => setSheet({ kind: "progress", name })}
             onSwap={onSwap}
             onSkipHurt={onSkipHurt}
             onSaveNote={onSaveNote}

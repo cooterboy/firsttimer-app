@@ -14,7 +14,10 @@ import Sheet from "./workout/Sheet";
 type Colors = ReturnType<typeof useTheme>["colors"];
 
 // Prototype's SUB.lift — ported as a bottom sheet rather than a separate screen,
-// matching how SessionDetailSheet already handles a past session's own detail.
+// matching how SessionDetailSheet already handles a past session's own detail. Used
+// from Progress → Lifts. The content is MovementProgress (below), so a sheet that's
+// already open — Programs' "Every movement", the workout's movement info — can show it
+// in place: React Native won't reliably open a second modal while one is closing.
 export default function MovementDetailSheet({
   name,
   history,
@@ -26,8 +29,28 @@ export default function MovementDetailSheet({
   history: HistoryEntry[];
   units: Units;
   onClose: () => void;
-  // Opens another movement's sheet — the "Also done as" links. Without it the
-  // line still shows, just not tappable.
+  onOpenMovement?: (name: string) => void;
+}) {
+  return (
+    <Sheet visible={!!name} onClose={onClose}>
+      {name ? <MovementProgress name={name} history={history} units={units} onOpenMovement={onOpenMovement} /> : null}
+    </Sheet>
+  );
+}
+
+// One movement's progress: what it works, the summary, "Also done as", the two
+// charts and every session on it.
+export function MovementProgress({
+  name,
+  history,
+  units,
+  onOpenMovement,
+}: {
+  name: string;
+  history: HistoryEntry[];
+  units: Units;
+  // Switches to another movement — the "Also done as" links. Without it the line
+  // still shows, just not tappable.
   onOpenMovement?: (name: string) => void;
 }) {
   const { colors } = useTheme();
@@ -36,7 +59,6 @@ export default function MovementDetailSheet({
   const [picked, setPicked] = useState<number | null>(null);
   useEffect(() => setPicked(null), [name]);
   const { program } = useAppState();
-  if (!name) return null;
   const why = whyFor(program, name);
   const doneAs = alsoDoneAs(name, program, history);
   const u = unit(units);
@@ -44,12 +66,12 @@ export default function MovementDetailSheet({
 
   if (!s.length) {
     return (
-      <Sheet visible={!!name} onClose={onClose}>
+      <>
         <Text style={[styles.title, { color: colors.ink, fontFamily: fonts.display }]}>{name}</Text>
         <WhatItWorks text={why} colors={colors} />
         <Text style={[styles.note, { color: colors.muted, marginTop: 10 }]}>No weights logged for this one yet.</Text>
         <AlsoDoneAs items={doneAs} onOpen={onOpenMovement} colors={colors} />
-      </Sheet>
+      </>
     );
   }
 
@@ -82,7 +104,7 @@ export default function MovementDetailSheet({
   };
 
   return (
-    <Sheet visible={!!name} onClose={onClose}>
+    <>
       <Text style={[styles.title, { color: colors.ink, fontFamily: fonts.display }]}>{name}</Text>
       <WhatItWorks text={why} colors={colors} />
       <Text style={[styles.lede, { color: colors.ink2 }]}>{read}</Text>
@@ -144,7 +166,7 @@ export default function MovementDetailSheet({
         Both charts run left to right over the same sessions. Weight is your heaviest set that day; work is every set
         added up — the one that keeps moving when the weight doesn't.
       </Text>
-    </Sheet>
+    </>
   );
 }
 

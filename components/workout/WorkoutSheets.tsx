@@ -3,7 +3,8 @@ import { Keyboard, Text, TextInput, TouchableOpacity, View, StyleSheet } from "r
 import * as Haptics from "../../lib/haptics";
 import { useTheme } from "../../lib/ThemeContext";
 import { fonts, spacing } from "../../lib/theme";
-import { ActiveMove, Profile, SheetState } from "../../lib/types";
+import { ActiveMove, HistoryEntry, Profile, SheetState } from "../../lib/types";
+import { MovementProgress } from "../MovementDetailSheet";
 import { MovementVariant, unit } from "../../lib/gymProgram";
 import { MOVE_TAGS, WeightHint, startHint } from "../../lib/sessionEngine";
 
@@ -181,7 +182,15 @@ export function NoteSheetContent({
 }
 
 // ---- Movement info ----
-export function InfoSheetContent({ move, onClose }: { move: ActiveMove; onClose: () => void }) {
+export function InfoSheetContent({
+  move,
+  onShowProgress,
+  onClose,
+}: {
+  move: ActiveMove;
+  onShowProgress: (name: string) => void;
+  onClose: () => void;
+}) {
   const why = move.why || move.orig.why || "Same muscles as the gym version of this movement.";
   return (
     <View>
@@ -191,6 +200,7 @@ export function InfoSheetContent({ move, onClose }: { move: ActiveMove; onClose:
       <SheetBody>This session: {move.spec}</SheetBody>
       {move.orig.sub ? <SheetBody>If the machine's taken: {move.orig.sub.n}.</SheetBody> : null}
       {move.orig.easier ? <SheetBody>Easier version: {move.orig.easier.n}.</SheetBody> : null}
+      <Opt title="Your progress ›" onPress={() => onShowProgress(move.n)} />
       <Opt title="Got it" onPress={onClose} />
     </View>
   );
@@ -335,6 +345,8 @@ export default function WorkoutSheetRouter(props: {
   sheet: SheetState;
   move: ActiveMove | null;
   profile: Profile;
+  history: HistoryEntry[];
+  onShowProgress: (name: string) => void;
   onSwap: (alt: MovementVariant, label: string) => void;
   onSkipHurt: () => void;
   onSaveNote: (note: string, tags: string[]) => void;
@@ -342,7 +354,7 @@ export default function WorkoutSheetRouter(props: {
   onShortOnTime: () => void;
   onClose: () => void;
 }) {
-  const { sheet, move, profile, onSwap, onSkipHurt, onSaveNote, onFindWeightSave, onShortOnTime, onClose } = props;
+  const { sheet, move, profile, history, onShowProgress, onSwap, onSkipHurt, onSaveNote, onFindWeightSave, onShortOnTime, onClose } = props;
   if (!sheet || !move) return null;
   switch (sheet.kind) {
     case "swap":
@@ -352,7 +364,11 @@ export default function WorkoutSheetRouter(props: {
     case "note":
       return <NoteSheetContent move={move} onSave={onSaveNote} onClose={onClose} />;
     case "info":
-      return <InfoSheetContent move={move} onClose={onClose} />;
+      return <InfoSheetContent move={move} onShowProgress={onShowProgress} onClose={onClose} />;
+    case "progress":
+      // The movement on screen (whatever is being done now, swap included); its
+      // "Also done as" links switch to that movement in place.
+      return <MovementProgress name={sheet.name} history={history} units={profile.units} onOpenMovement={onShowProgress} />;
     case "shortOnTime":
       return <ShortOnTimeSheetContent onConfirm={onShortOnTime} onClose={onClose} />;
     case "findWeight":

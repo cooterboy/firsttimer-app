@@ -239,6 +239,7 @@ export type SheetState =
   | { kind: "note" }
   | { kind: "findWeight" }
   | { kind: "info" }
+  | { kind: "progress"; name: string }
   | { kind: "shortOnTime" }
   | null;
 
