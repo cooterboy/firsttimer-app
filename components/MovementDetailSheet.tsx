@@ -5,7 +5,7 @@ import * as Haptics from "../lib/haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { HistoryEntry, Units } from "../lib/types";
-import { LiftPoint, fmtDate, liftSeries } from "../lib/sessionEngine";
+import { LiftPoint, fmtDate, liftSeries, weeksBetween, weeksLabel } from "../lib/sessionEngine";
 import { unit, whyFor } from "../lib/gymProgram";
 import { useAppState } from "../lib/appState";
 import { blockRuns, formatTick, niceScale } from "../lib/chartScale";
@@ -58,7 +58,7 @@ export default function MovementDetailSheet({
   if (s.length < 2) {
     read = `Logged once, at ${last.top} ${u}. This movement comes round every third session — the chart draws itself the second time you do it.`;
   } else if (dW > 0) {
-    read = `Up ${dW} ${u} on your heaviest set since ${fmtDate(first.date)}${pct ? ` — ${pct}% more` : ""}. Total work is ${vPct >= 0 ? "up" : "down"} ${Math.abs(vPct)}%.`;
+    read = `Up ${dW} ${u} on your heaviest set in ${weeksLabel(weeksBetween(first.date, last.date))}${pct ? ` — ${pct}% more` : ""}. Total work is ${vPct >= 0 ? "up" : "down"} ${Math.abs(vPct)}%.`;
   } else if (dV > 0) {
     read = `The weight hasn't moved, but you're doing ${vPct}% more total work than your first session on this. That's the same progress wearing different clothes.`;
   } else {
@@ -269,14 +269,28 @@ function LiftChart({
         })
       )}
 
-      {/* x axis: the first and last session's dates, under the lower chart only —
-          centred under their sessions, held back from the edges so they never clip */}
+      {/* x axis, under the lower chart only: the first session's date, and the
+          latest one's with the weeks since the first ("Oct 16 · 6 weeks") — the same
+          span the summary line uses. Centred under their sessions; a label that would
+          run past the right edge is right-aligned to it instead, so nothing clips. */}
       {kind === "bar"
-        ? [0, n - 1].map((i) => (
-            <SvgText key={`d${i}`} x={Math.min(W - 16, Math.max(16, X(i)))} y={H - 5} fontSize={9} fill={colors.muted} textAnchor="middle">
-              {fmtDate(s[i].date)}
-            </SvgText>
-          ))
+        ? [0, n - 1].map((i) => {
+            const text = i === 0 ? fmtDate(s[0].date) : `${fmtDate(s[i].date)} · ${weeksLabel(weeksBetween(s[0].date, s[i].date))}`;
+            const half = (text.length * 5) / 2; // ~5 units per character at this size
+            const atEdge = X(i) + half > W - 2;
+            return (
+              <SvgText
+                key={`d${i}`}
+                x={atEdge ? W - 2 : Math.max(16, X(i))}
+                y={H - 5}
+                fontSize={9}
+                fill={colors.muted}
+                textAnchor={atEdge ? "end" : "middle"}
+              >
+                {text}
+              </SvgText>
+            );
+          })
         : null}
 
       {/* tap targets: a full column per session, wider than any mark */}

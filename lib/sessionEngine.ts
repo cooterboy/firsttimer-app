@@ -520,6 +520,15 @@ export type LiftPoint = {
   note: string;
   mtags: string[];
 };
+// Whole weeks between two sessions, rounded, at least 1 — for "Up 15 lb in 6 weeks".
+export function weeksBetween(fromIso: string, toIso: string): number {
+  const days = (new Date(toIso).getTime() - new Date(fromIso).getTime()) / 86400000;
+  return Math.max(1, Math.round(days / 7));
+}
+export function weeksLabel(n: number): string {
+  return `${n} week${n === 1 ? "" : "s"}`;
+}
+
 export function liftSeries(name: string, history: HistoryEntry[]): LiftPoint[] {
   const out: LiftPoint[] = [];
   history.forEach((h) => {
