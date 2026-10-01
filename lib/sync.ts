@@ -6,6 +6,7 @@
 import { supabase } from "./supabase";
 import { Friend, HistoryEntry, MobilityEntry, Profile, Purchase, Settings, WalkEntry, WalkKind, WeighIn } from "./types";
 import { BaseMovement, MovementParams, MovementType, MovementVariant, Program } from "./gymProgram";
+import { Gym } from "./gyms";
 
 type ProfileRow = {
   id: string;
@@ -27,6 +28,8 @@ type ProfileRow = {
   box_code: string | null;
   city: string | null;
   recovery_adjusted_at: string | null;
+  gym_code: string | null;
+  gym_set_at: string | null;
   settings: Partial<Settings> | null;
   block: number;
   session: number;
@@ -209,6 +212,8 @@ export async function fetchRemoteState(userId: string): Promise<RemoteState | nu
       boxCode: profileRow.box_code || "",
       city: profileRow.city || "",
       recoveryAdjustedAt: profileRow.recovery_adjusted_at || null,
+      gymCode: profileRow.gym_code ?? null,
+      gymSetAt: profileRow.gym_set_at ?? null,
     },
     settings: profileRow.settings || null,
     block: profileRow.block || 1,
@@ -251,6 +256,10 @@ export async function pushProfile(
     box_code: profile.boxCode || null,
     city: profile.city || null,
     recovery_adjusted_at: profile.recoveryAdjustedAt,
+    // Left undefined (so omitted, not nulled) by a profile cached before these
+    // fields existed — an older cache never wipes an answer saved elsewhere.
+    gym_code: profile.gymCode,
+    gym_set_at: profile.gymSetAt,
     block: meta.block,
     session: meta.session,
     streak: meta.streak,
@@ -517,6 +526,22 @@ export type ShopItem = {
 // Same shape/pattern as fetchProgramContent() above — shop content as data (migration
 // 012), never fatal (a fresh install or offline launch just shows an empty shop until
 // this succeeds; see lib/appState.tsx).
+// The gyms list for the "which gym gave you your box" question (migration 019).
+// Returns null on any error, so the screen can offer a retry instead of an empty list.
+export async function fetchGyms(): Promise<Gym[] | null> {
+  const { data, error } = await supabase.from("gyms").select("code, name, active, sort_order").order("sort_order", { ascending: true });
+  if (error) {
+    console.warn("Gyms fetch failed (migration 019 run yet?):", error);
+    return null;
+  }
+  return ((data as { code: string; name: string; active: boolean; sort_order: number }[]) || []).map((g) => ({
+    code: g.code,
+    name: g.name,
+    active: g.active,
+    sortOrder: g.sort_order,
+  }));
+}
+
 export async function fetchShopItems(): Promise<ShopItem[] | null> {
   const { data, error } = await supabase.from("shop_items").select("*").order("sort_order", { ascending: true });
   if (error) {

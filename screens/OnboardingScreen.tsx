@@ -1,10 +1,12 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Keyboard, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "../lib/haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { useAppState } from "../lib/appState";
+import { fetchGyms } from "../lib/sync";
+import { GYM_OTHER, GYM_OTHER_LABEL, Gym, gymChoiceFor, gymFieldsFor, listedGyms } from "../lib/gyms";
 import {
   ACTIVITY_LABEL,
   Activity,
@@ -75,8 +77,19 @@ export default function OnboardingScreen({ onDone }: { onDone: () => void }) {
   const [heightIn, setHeightIn] = useState("");
   const [heightCm, setHeightCm] = useState("");
   const [disclaimer, setDisclaimer] = useState(false);
+  // Which gym gave them their box (migration 019) — required, with a "Somewhere
+  // else" answer, so every member ends up with a value the month-two report can
+  // group by. Development builds also list inactive gyms (the TEST row).
+  const [gymChoice, setGymChoice] = useState<string | null>(gymChoiceFor(p));
+  const [gyms, setGyms] = useState<Gym[] | null>(null);
+  const [gymsFailed, setGymsFailed] = useState(false);
+  const loadGyms = () => {
+    setGymsFailed(false);
+    fetchGyms().then((g) => (g ? setGyms(listedGyms(g, __DEV__)) : setGymsFailed(true)));
+  };
+  useEffect(loadGyms, []);
 
-  const canNext = step === 0 ? !!(where && days) : step === 1 ? !!(activity && goal) : disclaimer;
+  const canNext = step === 0 ? !!(gymChoice && where && days) : step === 1 ? !!(activity && goal) : disclaimer;
 
   const finish = () => {
     const nextHeightCm = p.units === "metric" ? Number(heightCm) || null : (Number(heightFt) || 0) * 30.48 + (Number(heightIn) || 0) * 2.54 || null;
@@ -90,6 +103,7 @@ export default function OnboardingScreen({ onDone }: { onDone: () => void }) {
       weight: Number(weight) || p.weight,
       heightCm: nextHeightCm || p.heightCm,
       medicalDisclaimerAccepted: true,
+      ...(gymChoice ? gymFieldsFor(gymChoice) : {}),
     });
     onDone();
   };
@@ -120,6 +134,22 @@ export default function OnboardingScreen({ onDone }: { onDone: () => void }) {
         {step === 0 ? (
           <>
             <Text style={[styles.lede, { color: colors.ink2 }]}>Pick what you're starting. The first block is always free.</Text>
+            <FieldLabel>Which gym gave you your First Timer box?</FieldLabel>
+            {gyms ? (
+              <View style={styles.pillWrap}>
+                {gyms.map((g) => (
+                  <Pill key={g.code} label={g.name} on={gymChoice === g.code} onPress={() => setGymChoice(g.code)} />
+                ))}
+                <Pill label={GYM_OTHER_LABEL} on={gymChoice === GYM_OTHER} onPress={() => setGymChoice(GYM_OTHER)} />
+              </View>
+            ) : gymsFailed ? (
+              <View style={styles.pillWrap}>
+                <Text style={[styles.note, { color: colors.muted, marginTop: 0, width: "100%" }]}>Couldn't load the list of gyms.</Text>
+                <Pill label="Try again" on={false} onPress={loadGyms} />
+              </View>
+            ) : (
+              <Text style={[styles.note, { color: colors.muted, marginTop: 0 }]}>Loading gyms…</Text>
+            )}
             <FieldLabel>WHERE YOU'LL TRAIN</FieldLabel>
             <View style={styles.pillWrap}>
               {(Object.keys(WHERE_LABEL) as Where[]).map((k) => (

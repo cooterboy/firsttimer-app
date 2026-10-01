@@ -89,6 +89,10 @@ export type Profile = {
   // after the cooldown; if it's still hot, the doctor/trainer escalation message shows
   // instead of clearing it.
   recoveryAdjustedAt: string | null;
+  // The gym that gave them their box (lib/gyms.ts, migration 019). gymSetAt null =
+  // never answered; set with gymCode null = "Somewhere else / I didn't get a box".
+  gymCode: string | null;
+  gymSetAt: string | null;
 };
 
 // A friend added via code (state.friends.list + state.friends.bumps merged into

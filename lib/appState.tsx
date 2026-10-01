@@ -68,6 +68,8 @@ const defaultProfile: Profile = {
   boxCode: "",
   city: "",
   recoveryAdjustedAt: null,
+  gymCode: null,
+  gymSetAt: null,
 };
 
 const defaultSettings: Settings = {
