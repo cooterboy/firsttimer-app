@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useTheme } from "../../lib/ThemeContext";
 import { radius } from "../../lib/theme";
 
@@ -29,14 +29,21 @@ function useKeyboardHeight() {
 export default function Sheet({ visible, onClose, children }: Props) {
   const { colors } = useTheme();
   const kbHeight = useKeyboardHeight();
+  // The height cap is in points, from the window, not a percentage: the sheet's
+  // parent has no height of its own, so a percentage cap didn't reliably apply, and
+  // tall content (a long progress history) hung off the bottom of the screen with
+  // nothing to scroll. With a real cap and a ScrollView allowed to shrink into it,
+  // tall content scrolls; short content is unchanged.
+  const { height: windowHeight } = useWindowDimensions();
+  const maxHeight = Math.max(200, (windowHeight - kbHeight) * 0.85);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={{ width: "100%", marginBottom: kbHeight }}>
-          <View style={[styles.sheet, { backgroundColor: colors.raised, borderColor: colors.line }]}>
+          <View style={[styles.sheet, { maxHeight, backgroundColor: colors.raised, borderColor: colors.line }]}>
             <View style={[styles.grip, { backgroundColor: colors.line }]} />
-            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
               {children}
             </ScrollView>
           </View>
@@ -57,8 +64,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius,
     borderWidth: 1,
     borderBottomWidth: 0,
-    maxHeight: "85%",
   },
+  scroll: { flexShrink: 1 },
   grip: {
     width: 36,
     height: 4,
