@@ -529,6 +529,32 @@ export function weeksLabel(n: number): string {
   return `${n} week${n === 1 ? "" : "s"}`;
 }
 
+// Other exercises this movement was done as — a swap, easier or pain version
+// logged in its place — with how many sessions each. History keys a session's
+// movements by what was actually done, not what it replaced, so a session counts
+// only if it's one of this movement's own template (Leg press → Session A) and this
+// movement wasn't logged in it; then any of its alternatives that were logged
+// count, once per session. (Goblet squat in Session B is its own slot, so it never
+// counts toward Leg press.) Most-done first.
+export function alsoDoneAs(name: string, program: Program, history: HistoryEntry[]): { name: string; count: number }[] {
+  const altsByCode = new Map<string, Set<string>>();
+  for (const t of program.templates) {
+    for (const m of t.moves) {
+      if (m.n !== name) continue;
+      const alts = altsByCode.get(t.code) ?? new Set<string>();
+      for (const v of [m.sub, m.easier, ...Object.values(m.pain || {})]) if (v && v.n !== name) alts.add(v.n);
+      altsByCode.set(t.code, alts);
+    }
+  }
+  const counts = new Map<string, number>();
+  for (const h of history) {
+    const alts = altsByCode.get(h.letter);
+    if (!alts || h.moves[name]) continue;
+    for (const a of alts) if (h.moves[a]) counts.set(a, (counts.get(a) ?? 0) + 1);
+  }
+  return [...counts].map(([n, count]) => ({ name: n, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
 export function liftSeries(name: string, history: HistoryEntry[]): LiftPoint[] {
   const out: LiftPoint[] = [];
   history.forEach((h) => {

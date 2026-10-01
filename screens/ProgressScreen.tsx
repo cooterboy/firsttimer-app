@@ -112,7 +112,13 @@ export default function ProgressScreen() {
         )}
       </ScrollView>
       <SessionDetailSheet entry={openEntry} units={profile.units} history={history} onClose={() => setOpenKey(null)} />
-      <MovementDetailSheet name={openLift} history={history} units={profile.units} onClose={() => setOpenLift(null)} />
+      <MovementDetailSheet
+        name={openLift}
+        history={history}
+        units={profile.units}
+        onClose={() => setOpenLift(null)}
+        onOpenMovement={setOpenLift}
+      />
       <WeighInDetailSheet entry={openWeighIn} units={profile.units} onClose={() => setOpenWeighInId(null)} />
     </SafeAreaView>
   );

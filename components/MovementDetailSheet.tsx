@@ -5,7 +5,7 @@ import * as Haptics from "../lib/haptics";
 import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { HistoryEntry, Units } from "../lib/types";
-import { LiftPoint, fmtDate, liftSeries, weeksBetween, weeksLabel } from "../lib/sessionEngine";
+import { LiftPoint, alsoDoneAs, fmtDate, liftSeries, weeksBetween, weeksLabel } from "../lib/sessionEngine";
 import { unit, whyFor } from "../lib/gymProgram";
 import { useAppState } from "../lib/appState";
 import { blockRuns, formatTick, niceScale } from "../lib/chartScale";
@@ -20,11 +20,15 @@ export default function MovementDetailSheet({
   history,
   units,
   onClose,
+  onOpenMovement,
 }: {
   name: string | null;
   history: HistoryEntry[];
   units: Units;
   onClose: () => void;
+  // Opens another movement's sheet — the "Also done as" links. Without it the
+  // line still shows, just not tappable.
+  onOpenMovement?: (name: string) => void;
 }) {
   const { colors } = useTheme();
   // The session the readout describes; null means the latest (the prototype's
@@ -34,6 +38,7 @@ export default function MovementDetailSheet({
   const { program } = useAppState();
   if (!name) return null;
   const why = whyFor(program, name);
+  const doneAs = alsoDoneAs(name, program, history);
   const u = unit(units);
   const s = liftSeries(name, history);
 
@@ -43,6 +48,7 @@ export default function MovementDetailSheet({
         <Text style={[styles.title, { color: colors.ink, fontFamily: fonts.display }]}>{name}</Text>
         <WhatItWorks text={why} colors={colors} />
         <Text style={[styles.note, { color: colors.muted, marginTop: 10 }]}>No weights logged for this one yet.</Text>
+        <AlsoDoneAs items={doneAs} onOpen={onOpenMovement} colors={colors} />
       </Sheet>
     );
   }
@@ -80,6 +86,7 @@ export default function MovementDetailSheet({
       <Text style={[styles.title, { color: colors.ink, fontFamily: fonts.display }]}>{name}</Text>
       <WhatItWorks text={why} colors={colors} />
       <Text style={[styles.lede, { color: colors.ink2 }]}>{read}</Text>
+      <AlsoDoneAs items={doneAs} onOpen={onOpenMovement} colors={colors} />
 
       {s.length >= 2 ? (
         <View style={[styles.chartCard, { backgroundColor: colors.sunken }]}>
@@ -150,6 +157,38 @@ function WhatItWorks({ text, colors }: { text: string | null; colors: Colors }) 
       <Text style={[styles.eyebrow, { color: colors.muted, marginBottom: 4 }]}>WHAT IT WORKS</Text>
       <Text style={{ color: colors.ink2, fontSize: 14, lineHeight: 20 }}>{text}</Text>
     </View>
+  );
+}
+
+// "Also done as Goblet squat (2x)" — the sessions where this movement was swapped
+// for something else, which is why they're not on its own charts. Each name opens
+// that exercise's own sheet. Nothing when it was never swapped.
+function AlsoDoneAs({
+  items,
+  onOpen,
+  colors,
+}: {
+  items: { name: string; count: number }[];
+  onOpen?: (name: string) => void;
+  colors: Colors;
+}) {
+  if (!items.length) return null;
+  return (
+    <Text style={[styles.note, { color: colors.muted, marginTop: 8 }]}>
+      Also done as{" "}
+      {items.map((it, i) => (
+        <Text key={it.name}>
+          {i > 0 ? ", " : ""}
+          <Text
+            onPress={onOpen ? () => onOpen(it.name) : undefined}
+            style={onOpen ? { color: colors.accentDeep, fontFamily: fonts.bodySemiBold } : undefined}
+            accessibilityRole={onOpen ? "link" : undefined}
+          >
+            {it.name} ({it.count}x)
+          </Text>
+        </Text>
+      ))}
+    </Text>
   );
 }
 
