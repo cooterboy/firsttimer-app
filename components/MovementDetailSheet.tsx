@@ -6,7 +6,8 @@ import { useTheme } from "../lib/ThemeContext";
 import { fonts, spacing } from "../lib/theme";
 import { HistoryEntry, Units } from "../lib/types";
 import { LiftPoint, fmtDate, liftSeries } from "../lib/sessionEngine";
-import { unit } from "../lib/gymProgram";
+import { unit, whyFor } from "../lib/gymProgram";
+import { useAppState } from "../lib/appState";
 import { blockRuns, formatTick, niceScale } from "../lib/chartScale";
 import Sheet from "./workout/Sheet";
 
@@ -30,7 +31,9 @@ export default function MovementDetailSheet({
   // say(s.length - 1)). Reset whenever a different movement opens.
   const [picked, setPicked] = useState<number | null>(null);
   useEffect(() => setPicked(null), [name]);
+  const { program } = useAppState();
   if (!name) return null;
+  const why = whyFor(program, name);
   const u = unit(units);
   const s = liftSeries(name, history);
 
@@ -38,6 +41,7 @@ export default function MovementDetailSheet({
     return (
       <Sheet visible={!!name} onClose={onClose}>
         <Text style={[styles.title, { color: colors.ink, fontFamily: fonts.display }]}>{name}</Text>
+        <WhatItWorks text={why} colors={colors} />
         <Text style={[styles.note, { color: colors.muted, marginTop: 10 }]}>No weights logged for this one yet.</Text>
       </Sheet>
     );
@@ -74,6 +78,7 @@ export default function MovementDetailSheet({
   return (
     <Sheet visible={!!name} onClose={onClose}>
       <Text style={[styles.title, { color: colors.ink, fontFamily: fonts.display }]}>{name}</Text>
+      <WhatItWorks text={why} colors={colors} />
       <Text style={[styles.lede, { color: colors.ink2 }]}>{read}</Text>
 
       {s.length >= 2 ? (
@@ -133,6 +138,18 @@ export default function MovementDetailSheet({
         added up — the one that keeps moving when the weight doesn't.
       </Text>
     </Sheet>
+  );
+}
+
+// The exercise's "what it works" text (exercises.why), under its name. Nothing when
+// the content has none for it.
+function WhatItWorks({ text, colors }: { text: string | null; colors: Colors }) {
+  if (!text) return null;
+  return (
+    <View style={styles.why}>
+      <Text style={[styles.eyebrow, { color: colors.muted, marginBottom: 4 }]}>WHAT IT WORKS</Text>
+      <Text style={{ color: colors.ink2, fontSize: 14, lineHeight: 20 }}>{text}</Text>
+    </View>
   );
 }
 
@@ -288,6 +305,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, letterSpacing: 0.5, marginBottom: 8 },
   lede: { fontSize: 14, lineHeight: 20 },
   eyebrow: { fontSize: 11, textTransform: "uppercase", letterSpacing: 1, fontWeight: "700", marginBottom: 8 },
+  why: { marginBottom: spacing.md },
   chartCard: { borderRadius: 12, padding: 14, marginTop: spacing.md },
   panelT: { fontSize: 11, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: "700", marginBottom: 2 },
   panelS: { fontSize: 12, marginBottom: 4 },

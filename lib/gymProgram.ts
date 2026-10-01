@@ -394,6 +394,21 @@ const PAIN_LABEL: Record<string, string> = { back: "lower back", other: "joints"
 // falling back to GYM_PROGRAM only if that fetch and its local cache both come
 // up empty. Sessions rotate through the program's templates in order, so the
 // rotation length is however many templates the program has (A/B/C for gym).
+// "What it works" for an exercise, by name, from the loaded program's content
+// (exercises.why) — whether it's a movement in its own slot or another movement's
+// swap / easier / pain version. Null when the content has no text for it.
+export function whyFor(program: Program, name: string): string | null {
+  for (const t of program.templates) {
+    for (const m of t.moves) {
+      if (m.n === name && m.why) return m.why;
+      for (const v of [m.sub, m.easier, ...Object.values(m.pain || {})]) {
+        if (v && v.n === name && v.why) return v.why;
+      }
+    }
+  }
+  return null;
+}
+
 export function buildSession(
   program: Program,
   block: number,
