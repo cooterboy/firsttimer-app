@@ -555,6 +555,25 @@ export function alsoDoneAs(name: string, program: Program, history: HistoryEntry
   return [...counts].map(([n, count]) => ({ name: n, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
+// Weighted movements in the program with no weights logged under their own name
+// that were done through a swap instead — the rows Progress → Lifts adds so a
+// movement that's only ever been swapped still has a way into its sheet (and its
+// "Also done as" line). One per name, in program order.
+export function swapOnlyLifts(program: Program, history: HistoryEntry[]): { name: string; doneAs: { name: string; count: number }[] }[] {
+  const seen = new Set<string>();
+  const out: { name: string; doneAs: { name: string; count: number }[] }[] = [];
+  for (const t of program.templates) {
+    for (const m of t.moves) {
+      if (m.type !== "weight" || seen.has(m.n)) continue;
+      seen.add(m.n);
+      if (liftSeries(m.n, history).length) continue;
+      const doneAs = alsoDoneAs(m.n, program, history);
+      if (doneAs.length) out.push({ name: m.n, doneAs });
+    }
+  }
+  return out;
+}
+
 export function liftSeries(name: string, history: HistoryEntry[]): LiftPoint[] {
   const out: LiftPoint[] = [];
   history.forEach((h) => {

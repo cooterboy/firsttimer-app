@@ -14,6 +14,7 @@ import {
   fmtDate,
   historyMovedTotal,
   liftDeltas,
+  swapOnlyLifts,
   Milestone,
   milestoneList,
   movedLabel,
@@ -84,7 +85,7 @@ export default function ProgressScreen() {
                 <MilestonesCard milestones={milestones} />
               </>
             ) : tab === "lifts" ? (
-              <Lifts colors={colors} history={history} units={profile.units} onOpen={setOpenLift} />
+              <Lifts colors={colors} history={history} program={appState.program} units={profile.units} onOpen={setOpenLift} />
             ) : tab === "body" ? (
               <Body
                 colors={colors}
@@ -330,23 +331,29 @@ function WeekChart({ colors, history }: { colors: ReturnType<typeof useTheme>["c
 function Lifts({
   colors,
   history,
+  program,
   units,
   onOpen,
 }: {
   colors: ReturnType<typeof useTheme>["colors"];
   history: ReturnType<typeof useAppState>["history"];
+  program: Program;
   units: "imperial" | "metric";
   onOpen: (name: string) => void;
 }) {
   const d = liftDeltas(history);
   const names = Object.keys(d);
+  // Movements only ever done through a swap: no weights of their own, so no row
+  // above, but they get one here — "Done as Goblet squat (1x)" — so their sheet
+  // and its "Also done as" line can still be opened.
+  const swapOnly = swapOnlyLifts(program, history);
   const u = unit(units);
   const maxCount = names.length ? Math.max(...names.map((n) => d[n].count)) : 0;
 
   return (
     <Card style={{ marginTop: spacing.md }}>
       <Text style={[styles.sub, { color: colors.ink, fontFamily: fonts.display }]}>Week 1 vs now</Text>
-      {!names.length ? (
+      {!names.length && !swapOnly.length ? (
         <Text style={[styles.note, { color: colors.muted }]}>
           Log a weight in session 1 and it shows up here. From session 4 on, the change shows next to it.
         </Text>
@@ -375,6 +382,22 @@ function Lifts({
               </TouchableOpacity>
             );
           })}
+          {swapOnly.map((x, i) => (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              key={`swap-${x.name}`}
+              onPress={() => onOpen(x.name)}
+              style={[styles.row, names.length + i > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.rowK, { color: colors.ink, fontFamily: fonts.bodySemiBold }]}>{x.name}</Text>
+                <Text style={[styles.rowSub, { color: colors.muted }]}>
+                  Done as {x.doneAs.map((a) => `${a.name} (${a.count}x)`).join(", ")}
+                </Text>
+              </View>
+              <Text style={{ color: colors.muted, fontSize: 18 }}>›</Text>
+            </TouchableOpacity>
+          ))}
           <Text style={[styles.note, { color: colors.muted, marginTop: 8 }]}>
             {maxCount < 2
               ? "A movement needs two sessions before it can draw a line, and each one comes round every third session."
